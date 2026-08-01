@@ -1,6 +1,6 @@
 """Routes HTTP du terminal."""
 
-from . import company, market, screener, search, valuation, watchlist
+from . import company, market, screener, search, valuation, watchlist, wealthfolio
 
 ROUTERS = [
     market.router,
@@ -9,6 +9,7 @@ ROUTERS = [
     screener.router,
     valuation.router,
     watchlist.router,
+    wealthfolio.router,
 ]
 
 __all__ = ["ROUTERS"]

@@ -33,16 +33,31 @@ class Cache:
     def __init__(self, path: str | None = None) -> None:
         self._path = str(path or settings.cache_path)
         self._lock = asyncio.Lock()
-        self._conn = sqlite3.connect(self._path, check_same_thread=False)
-        self._conn.executescript(_SCHEMA)
-        self._conn.commit()
+        self._conn: sqlite3.Connection | None = None
+
+    @property
+    def _db(self) -> sqlite3.Connection:
+        """Connexion, ouverte à la demande.
+
+        Le cache est un singleton de module dont le cycle de vie de
+        l'application appelle ``close()`` à l'arrêt. Sans réouverture
+        paresseuse, redémarrer l'application dans le même processus laisserait
+        une connexion morte derrière elle.
+        """
+        if self._conn is None:
+            self._conn = sqlite3.connect(self._path, check_same_thread=False)
+            self._conn.executescript(_SCHEMA)
+            self._conn.commit()
+        return self._conn
 
     def close(self) -> None:
-        self._conn.close()
+        if self._conn is not None:
+            self._conn.close()
+            self._conn = None
 
     def get(self, key: str) -> tuple[Any, float] | None:
         """Renvoie ``(valeur, horodatage_de_collecte)`` ou ``None`` si absent/expiré."""
-        row = self._conn.execute(
+        row = self._db.execute(
             "SELECT payload, stored_at FROM entries WHERE key = ? AND expires_at > ?",
             (key, time.time()),
         ).fetchone()
@@ -52,17 +67,17 @@ class Cache:
 
     def set(self, key: str, value: Any, ttl: int) -> float:
         now = time.time()
-        self._conn.execute(
+        self._db.execute(
             "INSERT OR REPLACE INTO entries (key, payload, stored_at, expires_at)"
             " VALUES (?, ?, ?, ?)",
             (key, json.dumps(value, default=str), now, now + ttl),
         )
-        self._conn.commit()
+        self._db.commit()
         return now
 
     def purge_expired(self) -> int:
-        cur = self._conn.execute("DELETE FROM entries WHERE expires_at <= ?", (time.time(),))
-        self._conn.commit()
+        cur = self._db.execute("DELETE FROM entries WHERE expires_at <= ?", (time.time(),))
+        self._db.commit()
         return cur.rowcount
 
     async def resolve(
