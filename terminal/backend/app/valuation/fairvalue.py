@@ -214,7 +214,6 @@ def compute(
             continue
         dispersion = max(dispersion, MIN_DISPERSION)
 
-        current = multiple.dropna()
         components.append(
             ComponentResult(
                 key=key,
@@ -222,14 +221,16 @@ def compute(
                 median_multiple=median,
                 dispersion=dispersion,
                 weight=0.0,  # renseigné après normalisation
-                current_multiple=float(current.iloc[-1]) if len(current) else None,
+                # Multiple courant : la valeur brute, non écrêtée — c'est ce que
+                # paie le marché aujourd'hui.
+                current_multiple=float(clean.iloc[-1]) if len(clean) else None,
                 observations=observations,
             )
         )
         fair_values[key] = (values * median).where(usable)
 
     if not components:
-        detail = " ".join(item["reason"] for item in excluded) or ""
+        detail = " ".join(item["reason"] for item in excluded)
         raise ValuationError(
             "Aucun multiple exploitable : les fondamentaux publiés sont "
             f"insuffisants ou négatifs sur toute la période. {detail}".strip()
