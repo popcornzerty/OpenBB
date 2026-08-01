@@ -17,11 +17,31 @@ const BACKEND_PORT: u16 = 8801;
 /// Processus backend, conservé pour pouvoir l'arrêter à la fermeture.
 struct Backend(Mutex<Option<Child>>);
 
+/// Cherche un chemin relatif dans le dossier de départ puis dans chacun de ses
+/// ancêtres.
+///
+/// Remonter l'arborescence plutôt que coder des `../../..` en dur : la
+/// profondeur de `resource_dir` diffère entre l'exécution en développement
+/// (`target/release`) et l'application installée, et un décalage d'un seul
+/// niveau suffit à ne rien trouver.
+fn find_upwards(start: &Path, relative: &str, max_depth: usize) -> Option<PathBuf> {
+    let mut current = Some(start);
+    for _ in 0..max_depth {
+        let dir = current?;
+        let candidate = dir.join(relative);
+        if candidate.exists() {
+            return Some(candidate);
+        }
+        current = dir.parent();
+    }
+    None
+}
+
 /// Localise l'interpréteur Python à utiliser.
 ///
-/// En développement, l'environnement virtuel du dépôt ; en production, un
-/// interpréteur embarqué à côté de l'exécutable. La variable d'environnement
-/// `PEATERM_PYTHON` permet de forcer un chemin.
+/// En production, un interpréteur embarqué à côté de l'exécutable ; en
+/// développement, l'environnement virtuel du dépôt. `PEATERM_PYTHON` permet de
+/// forcer un chemin.
 fn find_python(resource_dir: &Path) -> Option<PathBuf> {
     if let Ok(explicit) = std::env::var("PEATERM_PYTHON") {
         let path = PathBuf::from(explicit);
@@ -30,25 +50,25 @@ fn find_python(resource_dir: &Path) -> Option<PathBuf> {
         }
     }
 
-    let candidates = [
-        resource_dir.join("python/python.exe"),
-        resource_dir.join("../.venv/Scripts/python.exe"),
-        // Arborescence de développement : src-tauri/target/debug -> racine du dépôt.
-        resource_dir.join("../../../../../../.venv/Scripts/python.exe"),
-    ];
-    candidates.into_iter().find(|path| path.exists())
+    let embedded = resource_dir.join("python/python.exe");
+    if embedded.exists() {
+        return Some(embedded);
+    }
+
+    find_upwards(resource_dir, ".venv/Scripts/python.exe", 8)
+        .or_else(|| find_upwards(resource_dir, ".venv/bin/python", 8))
 }
 
 /// Localise le dossier du backend Python.
 fn find_backend_dir(resource_dir: &Path) -> Option<PathBuf> {
-    let candidates = [
-        resource_dir.join("backend"),
-        resource_dir.join("../../../../../backend"),
-        resource_dir.join("../../../../../../terminal/backend"),
-    ];
-    candidates
-        .into_iter()
-        .find(|path| path.join("app/main.py").exists())
+    let bundled = resource_dir.join("backend");
+    if bundled.join("app/main.py").exists() {
+        return Some(bundled);
+    }
+
+    find_upwards(resource_dir, "terminal/backend/app/main.py", 8)
+        .or_else(|| find_upwards(resource_dir, "backend/app/main.py", 8))
+        .and_then(|main| main.parent()?.parent().map(Path::to_path_buf))
 }
 
 fn spawn_backend(resource_dir: &Path) -> Option<Child> {
