@@ -18,6 +18,18 @@ tauri = { version = "2", features = [] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
+[target.'cfg(windows)'.dependencies]
+# Objet de travail Windows : lie le backend au cycle de vie de l'application,
+# y compris lorsque celle-ci est tuée sans pouvoir exécuter son code de sortie.
+windows = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_System_JobObjects",
+    "Win32_System_Threading",
+    # CreateJobObjectW prend des attributs de sécurité : sans cette feature,
+    # la fonction n'est pas compilée dans la crate.
+    "Win32_Security",
+] }
+
 [profile.release]
 codegen-units = 1
 lto = true

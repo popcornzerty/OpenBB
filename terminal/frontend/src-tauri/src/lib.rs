@@ -96,7 +96,59 @@ fn spawn_backend(resource_dir: &Path) -> Option<Child> {
         command.creation_flags(CREATE_NO_WINDOW);
     }
 
-    command.spawn().ok()
+    let child = command.spawn().ok()?;
+
+    #[cfg(windows)]
+    attach_to_job(&child);
+
+    Some(child)
+}
+
+/// Rattache le backend à un objet de travail configuré pour tuer ses membres
+/// quand le dernier descripteur se ferme.
+///
+/// Fermer la fenêtre suffit normalement à arrêter le backend, mais un arrêt
+/// brutal — plantage, `Stop-Process -Force`, fin de session — laisse sinon un
+/// serveur orphelin qui retient le port et bloque le lancement suivant. Le
+/// descripteur de l'objet de travail se ferme avec le processus quoi qu'il
+/// arrive : c'est le système qui fait alors le ménage.
+#[cfg(windows)]
+fn attach_to_job(child: &Child) {
+    use std::os::windows::io::AsRawHandle;
+
+    use windows::Win32::Foundation::HANDLE;
+    use windows::Win32::System::JobObjects::{
+        AssignProcessToJobObject, CreateJobObjectW, JobObjectExtendedLimitInformation,
+        SetInformationJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
+        JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+    };
+
+    unsafe {
+        let Ok(job) = CreateJobObjectW(None, windows::core::PCWSTR::null()) else {
+            return;
+        };
+
+        let mut limits = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
+        limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+
+        if SetInformationJobObject(
+            job,
+            JobObjectExtendedLimitInformation,
+            &limits as *const _ as *const std::ffi::c_void,
+            std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
+        )
+        .is_err()
+        {
+            return;
+        }
+
+        let _ = AssignProcessToJobObject(job, HANDLE(child.as_raw_handle() as _));
+
+        // `job` n'est volontairement jamais fermé : `HANDLE` est un simple
+        // entier sans destructeur, donc ne pas appeler `CloseHandle` suffit à
+        // le garder ouvert jusqu'à la fin du processus. C'est précisément sa
+        // fermeture par le système, à ce moment-là, qui tue le backend.
+    }
 }
 
 /// Indique au frontend où joindre le backend.
