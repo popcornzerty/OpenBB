@@ -149,7 +149,8 @@ class TestSerieEtProjection:
         first = dt.date.fromisoformat(result["projection"]["dates"][0])
         last = dt.date.fromisoformat(result["projection"]["dates"][-1])
         months = (last.year - first.year) * 12 + last.month - first.month
-        assert months >= settings.valuation_projection_months - 2
+        # L'horizon demandé doit être atteint, à la dernière semaine près.
+        assert months >= settings.valuation_projection_months - 1
 
     def test_la_projection_est_signalee_comme_illustrative(self):
         result = fairvalue.compute(_history(), _points())

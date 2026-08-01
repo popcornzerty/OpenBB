@@ -136,9 +136,12 @@ def _project(curve: pd.Series, months: int) -> pd.Series:
     growth = max(-0.25, min(0.25, growth))
 
     last_date = curve.index[-1]
-    future = pd.date_range(
-        last_date + pd.Timedelta(days=7), periods=months * 4, freq="7D"
-    )
+    # Points hebdomadaires jusqu'à l'horizon exact : compter en semaines
+    # (4 par mois) raccourcirait la projection d'environ un mois et demi.
+    horizon = last_date + pd.DateOffset(months=months)
+    future = pd.date_range(last_date + pd.Timedelta(days=7), horizon, freq="7D")
+    if len(future) == 0:
+        return pd.Series(dtype="float64")
     elapsed = np.array([(d - last_date).days / 365.25 for d in future])
     return pd.Series(end * (1 + growth) ** elapsed, index=future)
 
