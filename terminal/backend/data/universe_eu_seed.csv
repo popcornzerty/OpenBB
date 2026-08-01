@@ -1,0 +1,378 @@
+﻿symbol,name,index
+AC.PA,Accor,CAC40
+AI.PA,Air Liquide,CAC40
+AIR.PA,Airbus,CAC40
+ALO.PA,Alstom,CAC40
+MT.AS,ArcelorMittal,CAC40
+CS.PA,AXA,CAC40
+BNP.PA,BNP Paribas,CAC40
+EN.PA,Bouygues,CAC40
+BVI.PA,Bureau Veritas,CAC40
+CAP.PA,Capgemini,CAC40
+CA.PA,Carrefour,CAC40
+ACA.PA,Credit Agricole,CAC40
+BN.PA,Danone,CAC40
+DSY.PA,Dassault Systemes,CAC40
+EDEN.PA,Edenred,CAC40
+ENGI.PA,Engie,CAC40
+EL.PA,EssilorLuxottica,CAC40
+ERF.PA,Eurofins Scientific,CAC40
+RMS.PA,Hermes International,CAC40
+KER.PA,Kering,CAC40
+LR.PA,Legrand,CAC40
+OR.PA,L Oreal,CAC40
+MC.PA,LVMH,CAC40
+ML.PA,Michelin,CAC40
+ORA.PA,Orange,CAC40
+RI.PA,Pernod Ricard,CAC40
+PUB.PA,Publicis Groupe,CAC40
+RNO.PA,Renault,CAC40
+SAF.PA,Safran,CAC40
+SGO.PA,Saint-Gobain,CAC40
+SAN.PA,Sanofi,CAC40
+SU.PA,Schneider Electric,CAC40
+GLE.PA,Societe Generale,CAC40
+STLAP.PA,Stellantis,CAC40
+STMPA.PA,STMicroelectronics,CAC40
+TEP.PA,Teleperformance,CAC40
+HO.PA,Thales,CAC40
+TTE.PA,TotalEnergies,CAC40
+URW.AS,Unibail-Rodamco-Westfield,CAC40
+VIE.PA,Veolia Environnement,CAC40
+DG.PA,Vinci,CAC40
+VIV.PA,Vivendi,CAC40
+AMUN.PA,Amundi,SBF120
+ATO.PA,Atos,SBF120
+FDJ.PA,FDJ United,SBF120
+GTT.PA,Gaztransport et Technigaz,SBF120
+IPN.PA,Ipsen,SBF120
+KOF.PA,Kaufman et Broad,SBF120
+NEX.PA,Nexans,SBF120
+RCO.PA,Remy Cointreau,SBF120
+RXL.PA,Rexel,SBF120
+SW.PA,Sodexo,SBF120
+SOI.PA,Soitec,SBF120
+TE.PA,Technip Energies,SBF120
+UBI.PA,Ubisoft Entertainment,SBF120
+VRLA.PA,Verallia,SBF120
+SESG.PA,SES,SBF120
+ELIS.PA,Elis,SBF120
+COFA.PA,Coface,SBF120
+ALD.PA,Ayvens,SBF120
+AKE.PA,Arkema,SBF120
+ADS.DE,Adidas,DAX
+ALV.DE,Allianz,DAX
+BAS.DE,BASF,DAX
+BAYN.DE,Bayer,DAX
+BEI.DE,Beiersdorf,DAX
+BMW.DE,BMW,DAX
+BNR.DE,Brenntag,DAX
+CBK.DE,Commerzbank,DAX
+CON.DE,Continental,DAX
+1COV.DE,Covestro,DAX
+DTG.DE,Daimler Truck,DAX
+DBK.DE,Deutsche Bank,DAX
+DB1.DE,Deutsche Boerse,DAX
+DHL.DE,DHL Group,DAX
+DTE.DE,Deutsche Telekom,DAX
+EOAN.DE,E.ON,DAX
+FRE.DE,Fresenius,DAX
+HNR1.DE,Hannover Rueck,DAX
+HEI.DE,Heidelberg Materials,DAX
+HEN3.DE,Henkel,DAX
+IFX.DE,Infineon Technologies,DAX
+MBG.DE,Mercedes-Benz Group,DAX
+MRK.DE,Merck KGaA,DAX
+MTX.DE,MTU Aero Engines,DAX
+MUV2.DE,Muenchener Rueck,DAX
+PAH3.DE,Porsche Automobil Holding,DAX
+P911.DE,Porsche AG,DAX
+PUM.DE,Puma,DAX
+QIA.DE,Qiagen,DAX
+RHM.DE,Rheinmetall,DAX
+RWE.DE,RWE,DAX
+SAP.DE,SAP,DAX
+SRT3.DE,Sartorius,DAX
+SIE.DE,Siemens,DAX
+ENR.DE,Siemens Energy,DAX
+SHL.DE,Siemens Healthineers,DAX
+SY1.DE,Symrise,DAX
+VOW3.DE,Volkswagen,DAX
+VNA.DE,Vonovia,DAX
+ZAL.DE,Zalando,DAX
+AIXA.DE,Aixtron,MDAX
+BOSS.DE,Hugo Boss,MDAX
+EVK.DE,Evonik Industries,MDAX
+FRA.DE,Fraport,MDAX
+G1A.DE,GEA Group,MDAX
+KGX.DE,Kion Group,MDAX
+LEG.DE,LEG Immobilien,MDAX
+LHA.DE,Lufthansa,MDAX
+NDA.DE,Aurubis,MDAX
+O2D.DE,Telefonica Deutschland,MDAX
+RAA.DE,Rational,MDAX
+SDF.DE,K+S,MDAX
+TKA.DE,ThyssenKrupp,MDAX
+WCH.DE,Wacker Chemie,MDAX
+ADYEN.AS,Adyen,AEX
+AD.AS,Ahold Delhaize,AEX
+AKZA.AS,Akzo Nobel,AEX
+ASM.AS,ASM International,AEX
+ASML.AS,ASML Holding,AEX
+ASRNL.AS,ASR Nederland,AEX
+ABN.AS,ABN AMRO,AEX
+AGN.AS,Aegon,AEX
+BESI.AS,BE Semiconductor,AEX
+DSFIR.AS,DSM-Firmenich,AEX
+HEIA.AS,Heineken,AEX
+IMCD.AS,IMCD,AEX
+INGA.AS,ING Groep,AEX
+KPN.AS,KPN,AEX
+NN.AS,NN Group,AEX
+PHIA.AS,Philips,AEX
+PRX.AS,Prosus,AEX
+RAND.AS,Randstad,AEX
+UMG.AS,Universal Music Group,AEX
+WKL.AS,Wolters Kluwer,AEX
+EXO.AS,Exor,AEX
+APAM.AS,Aperam,AMX
+ARCAD.AS,Arcadis,AMX
+BAMNB.AS,Koninklijke BAM Groep,AMX
+CRBN.AS,Corbion,AMX
+FUR.AS,Fugro,AMX
+SBMO.AS,SBM Offshore,AMX
+TWEKA.AS,TKH Group,AMX
+VPK.AS,Aalberts,AMX
+ABI.BR,Anheuser-Busch InBev,BEL20
+ACKB.BR,Ackermans en van Haaren,BEL20
+AED.BR,Aedifica,BEL20
+AGS.BR,Ageas,BEL20
+ARGX.BR,argenx,BEL20
+BAR.BR,Barco,BEL20
+COFB.BR,Cofinimmo,BEL20
+COLR.BR,Colruyt,BEL20
+DIE.BR,D Ieteren Group,BEL20
+ELI.BR,Elia Group,BEL20
+GBLB.BR,Groupe Bruxelles Lambert,BEL20
+KBC.BR,KBC Groupe,BEL20
+LOTB.BR,Lotus Bakeries,BEL20
+MELE.BR,Melexis,BEL20
+PROX.BR,Proximus,BEL20
+SOF.BR,Sofina,BEL20
+SOLB.BR,Solvay,BEL20
+SYENS.BR,Syensqo,BEL20
+UCB.BR,UCB,BEL20
+UMI.BR,Umicore,BEL20
+WDP.BR,Warehouses De Pauw,BEL20
+ACS.MC,ACS Actividades,IBEX35
+ACX.MC,Acerinox,IBEX35
+AENA.MC,Aena,IBEX35
+AMS.MC,Amadeus IT Group,IBEX35
+ANA.MC,Acciona,IBEX35
+ANE.MC,Acciona Energias Renovables,IBEX35
+BBVA.MC,BBVA,IBEX35
+BKT.MC,Bankinter,IBEX35
+CABK.MC,CaixaBank,IBEX35
+CLNX.MC,Cellnex Telecom,IBEX35
+COL.MC,Inmobiliaria Colonial,IBEX35
+ELE.MC,Endesa,IBEX35
+ENG.MC,Enagas,IBEX35
+FDR.MC,Fluidra,IBEX35
+FER.MC,Ferrovial,IBEX35
+GRF.MC,Grifols,IBEX35
+IAG.MC,International Airlines Group,IBEX35
+IBE.MC,Iberdrola,IBEX35
+IDR.MC,Indra Sistemas,IBEX35
+ITX.MC,Industria de Diseno Textil,IBEX35
+LOG.MC,Logista,IBEX35
+MAP.MC,Mapfre,IBEX35
+MRL.MC,Merlin Properties,IBEX35
+NTGY.MC,Naturgy Energy,IBEX35
+PUIG.MC,Puig Brands,IBEX35
+RED.MC,Redeia,IBEX35
+REP.MC,Repsol,IBEX35
+ROVI.MC,Laboratorios Rovi,IBEX35
+SAB.MC,Banco Sabadell,IBEX35
+SAN.MC,Banco Santander,IBEX35
+SCYR.MC,Sacyr,IBEX35
+SLR.MC,Solaria Energia,IBEX35
+TEF.MC,Telefonica,IBEX35
+UNI.MC,Unicaja Banco,IBEX35
+A2A.MI,A2A,FTSEMIB
+AMP.MI,Amplifon,FTSEMIB
+AZM.MI,Azimut Holding,FTSEMIB
+BAMI.MI,Banco BPM,FTSEMIB
+BMED.MI,Banca Mediolanum,FTSEMIB
+BMPS.MI,Banca Monte dei Paschi,FTSEMIB
+BPE.MI,BPER Banca,FTSEMIB
+BZU.MI,Buzzi,FTSEMIB
+CPR.MI,Davide Campari-Milano,FTSEMIB
+DIA.MI,DiaSorin,FTSEMIB
+ENEL.MI,Enel,FTSEMIB
+ENI.MI,Eni,FTSEMIB
+ERG.MI,ERG,FTSEMIB
+RACE.MI,Ferrari,FTSEMIB
+FBK.MI,FinecoBank,FTSEMIB
+G.MI,Assicurazioni Generali,FTSEMIB
+HER.MI,Hera,FTSEMIB
+IP.MI,Interpump Group,FTSEMIB
+ISP.MI,Intesa Sanpaolo,FTSEMIB
+IG.MI,Italgas,FTSEMIB
+IVG.MI,Iveco Group,FTSEMIB
+LDO.MI,Leonardo,FTSEMIB
+MB.MI,Mediobanca,FTSEMIB
+MONC.MI,Moncler,FTSEMIB
+NEXI.MI,Nexi,FTSEMIB
+PIRC.MI,Pirelli,FTSEMIB
+PST.MI,Poste Italiane,FTSEMIB
+PRY.MI,Prysmian,FTSEMIB
+REC.MI,Recordati,FTSEMIB
+SPM.MI,Saipem,FTSEMIB
+SRG.MI,Snam,FTSEMIB
+STLAM.MI,Stellantis,FTSEMIB
+TIT.MI,Telecom Italia,FTSEMIB
+TEN.MI,Tenaris,FTSEMIB
+TRN.MI,Terna,FTSEMIB
+UCG.MI,UniCredit,FTSEMIB
+ABB.ST,ABB,OMXS30
+ALFA.ST,Alfa Laval,OMXS30
+ASSA-B.ST,Assa Abloy,OMXS30
+ATCO-A.ST,Atlas Copco A,OMXS30
+ATCO-B.ST,Atlas Copco B,OMXS30
+BOL.ST,Boliden,OMXS30
+ELUX-B.ST,Electrolux,OMXS30
+EQT.ST,EQT,OMXS30
+ERIC-B.ST,Ericsson,OMXS30
+ESSITY-B.ST,Essity,OMXS30
+EVO.ST,Evolution,OMXS30
+GETI-B.ST,Getinge,OMXS30
+HM-B.ST,Hennes och Mauritz,OMXS30
+HEXA-B.ST,Hexagon,OMXS30
+INVE-B.ST,Investor,OMXS30
+KINV-B.ST,Kinnevik,OMXS30
+NDA-SE.ST,Nordea Bank,OMXS30
+NIBE-B.ST,NIBE Industrier,OMXS30
+SAAB-B.ST,Saab,OMXS30
+SAND.ST,Sandvik,OMXS30
+SCA-B.ST,Svenska Cellulosa,OMXS30
+SEB-A.ST,Skandinaviska Enskilda Banken,OMXS30
+SHB-A.ST,Svenska Handelsbanken,OMXS30
+SINCH.ST,Sinch,OMXS30
+SKF-B.ST,SKF,OMXS30
+SWED-A.ST,Swedbank,OMXS30
+TEL2-B.ST,Tele2,OMXS30
+TELIA.ST,Telia Company,OMXS30
+VOLV-B.ST,Volvo,OMXS30
+AMBU-B.CO,Ambu,OMXC25
+BAVA.CO,Bavarian Nordic,OMXC25
+CARL-B.CO,Carlsberg,OMXC25
+COLO-B.CO,Coloplast,OMXC25
+DANSKE.CO,Danske Bank,OMXC25
+DEMANT.CO,Demant,OMXC25
+DSV.CO,DSV,OMXC25
+GMAB.CO,Genmab,OMXC25
+GN.CO,GN Store Nord,OMXC25
+ISS.CO,ISS,OMXC25
+MAERSK-B.CO,AP Moller Maersk,OMXC25
+NDA-DK.CO,Nordea Bank Danmark,OMXC25
+NKT.CO,NKT,OMXC25
+NOVO-B.CO,Novo Nordisk,OMXC25
+NSIS-B.CO,Novonesis,OMXC25
+ORSTED.CO,Orsted,OMXC25
+PNDORA.CO,Pandora,OMXC25
+RBREW.CO,Royal Unibrew,OMXC25
+ROCK-B.CO,Rockwool,OMXC25
+TRYG.CO,Tryg,OMXC25
+VWS.CO,Vestas Wind Systems,OMXC25
+ZEAL.CO,Zealand Pharma,OMXC25
+NOKIA.HE,Nokia,OMXH25
+NESTE.HE,Neste,OMXH25
+SAMPO.HE,Sampo,OMXH25
+UPM.HE,UPM-Kymmene,OMXH25
+STERV.HE,Stora Enso,OMXH25
+FORTUM.HE,Fortum,OMXH25
+KNEBV.HE,Kone,OMXH25
+ELISA.HE,Elisa,OMXH25
+ORNBV.HE,Orion,OMXH25
+WRT1V.HE,Wartsila,OMXH25
+METSO.HE,Metso,OMXH25
+KESKOB.HE,Kesko,OMXH25
+TYRES.HE,Nokian Renkaat,OMXH25
+HUH1V.HE,Huhtamaki,OMXH25
+VALMT.HE,Valmet,OMXH25
+KCR.HE,Konecranes,OMXH25
+TIETO.HE,TietoEVRY,OMXH25
+QTCOM.HE,Qt Group,OMXH25
+NDA-FI.HE,Nordea Bank Abp,OMXH25
+EQNR.OL,Equinor,OBX
+DNB.OL,DNB Bank,OBX
+TEL.OL,Telenor,OBX
+NHY.OL,Norsk Hydro,OBX
+MOWI.OL,Mowi,OBX
+YAR.OL,Yara International,OBX
+ORK.OL,Orkla,OBX
+AKRBP.OL,Aker BP,OBX
+SALM.OL,SalMar,OBX
+KOG.OL,Kongsberg Gruppen,OBX
+TOM.OL,Tomra Systems,OBX
+SCHA.OL,Schibsted,OBX
+GJF.OL,Gjensidige Forsikring,OBX
+STB.OL,Storebrand,OBX
+FRO.OL,Frontline,OBX
+SUBC.OL,Subsea 7,OBX
+LSG.OL,Leroy Seafood Group,OBX
+BAKKA.OL,Bakkafrost,OBX
+VAR.OL,Var Energi,OBX
+AKSO.OL,Aker Solutions,OBX
+OMV.VI,OMV,ATX
+EBS.VI,Erste Group Bank,ATX
+VOE.VI,Voestalpine,ATX
+VIG.VI,Vienna Insurance Group,ATX
+RBI.VI,Raiffeisen Bank International,ATX
+ANDR.VI,Andritz,ATX
+VER.VI,Verbund,ATX
+BG.VI,BAWAG Group,ATX
+WIE.VI,Wienerberger,ATX
+LNZ.VI,Lenzing,ATX
+POST.VI,Oesterreichische Post,ATX
+CAI.VI,CA Immobilien,ATX
+UQA.VI,Uniqa Insurance,ATX
+TKA.VI,Telekom Austria,ATX
+DOC.VI,DO and CO,ATX
+MMK.VI,Mayr-Melnhof Karton,ATX
+EVN.VI,EVN,ATX
+SBO.VI,Schoeller-Bleckmann,ATX
+EDP.LS,EDP Energias de Portugal,PSI
+EDPR.LS,EDP Renovaveis,PSI
+GALP.LS,Galp Energia,PSI
+JMT.LS,Jeronimo Martins,PSI
+NOS.LS,NOS SGPS,PSI
+SON.LS,Sonae,PSI
+ALTR.LS,Altri,PSI
+CTT.LS,CTT Correios de Portugal,PSI
+NVG.LS,Navigator Company,PSI
+SEM.LS,Semapa,PSI
+COR.LS,Corticeira Amorim,PSI
+BCP.LS,Banco Comercial Portugues,PSI
+RENE.LS,REN Redes Energeticas,PSI
+EGL.LS,Mota-Engil,PSI
+GVOLT.LS,Greenvolt,PSI
+PKO.WA,PKO Bank Polski,WIG20
+PKN.WA,Orlen,WIG20
+PZU.WA,PZU,WIG20
+PEO.WA,Bank Pekao,WIG20
+DNP.WA,Dino Polska,WIG20
+KGH.WA,KGHM Polska Miedz,WIG20
+ALE.WA,Allegro,WIG20
+LPP.WA,LPP,WIG20
+CDR.WA,CD Projekt,WIG20
+CPS.WA,Cyfrowy Polsat,WIG20
+OPL.WA,Orange Polska,WIG20
+MBK.WA,mBank,WIG20
+ALR.WA,Alior Bank,WIG20
+JSW.WA,Jastrzebska Spolka Weglowa,WIG20
+PGE.WA,PGE Polska Grupa Energetyczna,WIG20
+KTY.WA,Grupa Kety,WIG20
+KRU.WA,Kruk,WIG20
+BDX.WA,Budimex,WIG20
+TPE.WA,Tauron Polska Energia,WIG20
