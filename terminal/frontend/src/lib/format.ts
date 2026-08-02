@@ -37,7 +37,10 @@ export function compact(value: number | null | undefined, unit = ""): string {
 export function money(value: number | null | undefined, currency: string | null): string {
   if (value === null || value === undefined || Number.isNaN(value)) return "—";
   const symbol = currency === "EUR" ? "€" : currency ? NBSP + currency : "";
-  return `${num(value, value >= 100 ? 2 : 3)}${currency === "EUR" ? NBSP + symbol : symbol}`;
+  // Le seuil porte sur la magnitude : sans valeur absolue, une moins-value de
+  // -774,40 € passait sous la barre des 100 et s'affichait « -774,400 € ».
+  const digits = Math.abs(value) >= 100 ? 2 : 3;
+  return `${num(value, digits)}${currency === "EUR" ? NBSP + symbol : symbol}`;
 }
 
 export function date(value: string | null | undefined): string {

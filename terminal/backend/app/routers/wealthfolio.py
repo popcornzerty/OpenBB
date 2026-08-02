@@ -77,10 +77,22 @@ async def quote(symbol: str) -> dict:
             status = Eligibility.UNKNOWN.value
 
     as_of = data.get("as_of") or dt.datetime.now().isoformat()
+
+    # Certains instruments — les ETF en particulier — remontent sans dernier
+    # cours alors que l'ouverture et la clôture précédente sont présentes.
+    # Renvoyer `null` priverait Wealthfolio de toute valorisation ; on se
+    # rabat sur la clôture précédente en le signalant.
+    price = _num(data.get("last_price"))
+    price_source = "last"
+    if price is None:
+        price = _num(data.get("prev_close"))
+        price_source = "prev_close" if price is not None else "none"
+
     return {
         "symbol": ticker,
         "name": data.get("name"),
-        "price": _num(data.get("last_price")),
+        "price": price,
+        "price_source": price_source,
         # Wealthfolio attend une date de séance, pas un horodatage de collecte.
         "date": as_of[:10],
         "currency": data.get("currency"),

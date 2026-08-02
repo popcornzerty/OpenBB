@@ -163,8 +163,52 @@ export interface Valuation {
   as_of: string;
 }
 
+export interface PortfolioRow {
+  symbol: string;
+  name: string;
+  currency: string;
+  quantity: number;
+  average_cost: number;
+  cost_basis: number;
+  account_name: string;
+  snapshot_date: string;
+  price: number | null;
+  /** `last` = dernier cours ; `prev_close` = clôture précédente, faute de mieux. */
+  price_source?: "last" | "prev_close" | "none";
+  market_value: number | null;
+  gain: number | null;
+  gain_percent: number | null;
+  pea_status: PeaStatus;
+  pea_reason: string;
+  country_label: string | null;
+}
+
+export interface PortfolioSummary {
+  positions: number;
+  total_value: number;
+  total_cost: number;
+  total_gain: number | null;
+  total_gain_percent: number | null;
+  confirmed_pea_value: number;
+  confirmed_pea_share: number | null;
+  snapshot_date: string | null;
+}
+
 export const api = {
   health: () => get<Health>("/health"),
+
+  portfolioStatus: () =>
+    get<{
+      available: boolean;
+      database: string;
+      accounts: { id: string; name: string; currency: string; tracking_mode: string }[];
+      hint: string | null;
+    }>("/portfolio/status"),
+
+  portfolio: () =>
+    get<{ rows: PortfolioRow[]; summary: PortfolioSummary; source: string }>(
+      "/portfolio/holdings",
+    ),
 
   search: (q: string, limit = 12) =>
     get<{ query: string; is_isin: boolean; results: SearchResult[] }>("/search", { q, limit }),

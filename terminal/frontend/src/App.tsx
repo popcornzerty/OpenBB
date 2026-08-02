@@ -2,17 +2,19 @@ import { useCallback, useEffect, useState } from "react";
 import { CommandBar } from "./components/CommandBar";
 import { IndicesStrip } from "./components/IndicesStrip";
 import { Company } from "./panels/Company";
+import { Portfolio } from "./panels/Portfolio";
 import { Screener } from "./panels/Screener";
 import { Valuation } from "./panels/Valuation";
 import { Watchlist } from "./panels/Watchlist";
 
-type View = "marche" | "screener" | "societe" | "valorisation";
+type View = "marche" | "portefeuille" | "screener" | "societe" | "valorisation";
 
 const VIEWS: { id: View; label: string; key: string }[] = [
   { id: "marche", label: "Marché", key: "1" },
-  { id: "screener", label: "Screener PEA", key: "2" },
-  { id: "societe", label: "Société", key: "3" },
-  { id: "valorisation", label: "Valorisation", key: "4" },
+  { id: "portefeuille", label: "Portefeuille", key: "2" },
+  { id: "screener", label: "Screener PEA", key: "3" },
+  { id: "societe", label: "Société", key: "4" },
+  { id: "valorisation", label: "Valorisation", key: "5" },
 ];
 
 export default function App() {
@@ -81,7 +83,7 @@ export default function App() {
         )}
 
         <span className="header-hint">
-          <kbd>Ctrl</kbd> <kbd>K</kbd> rechercher · <kbd>1</kbd>–<kbd>4</kbd> écrans
+          <kbd>Ctrl</kbd> <kbd>K</kbd> rechercher · <kbd>1</kbd>–<kbd>5</kbd> écrans
         </span>
       </header>
 
@@ -89,6 +91,7 @@ export default function App() {
 
       <main className="main">
         {view === "marche" && <Watchlist onOpen={openSymbol} />}
+        {view === "portefeuille" && <Portfolio onOpen={openSymbol} />}
         {view === "screener" && <Screener onOpen={openSymbol} />}
         {view === "societe" && <Company symbol={symbol} />}
         {view === "valorisation" && <Valuation symbol={symbol} />}
