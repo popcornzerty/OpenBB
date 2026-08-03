@@ -36,6 +36,27 @@ async function get<T>(path: string, params?: Record<string, unknown>): Promise<T
   return response.json() as Promise<T>;
 }
 
+async function post<T>(path: string, params?: Record<string, unknown>): Promise<T> {
+  const url = new URL(BASE + path, ORIGIN);
+  if (params) {
+    for (const [key, value] of Object.entries(params)) {
+      if (value !== undefined && value !== null) url.searchParams.set(key, String(value));
+    }
+  }
+  const response = await fetch(url.toString(), { method: "POST" });
+  if (!response.ok) {
+    let detail = `${response.status}`;
+    try {
+      const body = await response.json();
+      if (body?.detail) detail = body.detail;
+    } catch {
+      /* corps non JSON */
+    }
+    throw new Error(detail);
+  }
+  return response.json() as Promise<T>;
+}
+
 export type PeaStatus = "eligible" | "non_eligible" | "inconnu";
 
 export interface Health {
@@ -163,6 +184,51 @@ export interface Valuation {
   as_of: string;
 }
 
+export interface RankingStatus {
+  state: "idle" | "running" | "done" | "error";
+  total: number;
+  done: number;
+  progress: number;
+  elapsed_seconds: number | null;
+  computed: number;
+  skipped: number;
+  error: string | null;
+  as_of: number | null;
+}
+
+export interface RankingRow {
+  symbol: string;
+  name: string;
+  sector: string;
+  country: string;
+  index: string;
+  last_price: number;
+  fair_value: number | null;
+  /** Écart cours / juste valeur. Négatif = sous-coté. */
+  gap: number | null;
+  /** Facteur de fiabilité dans [0, 1]. */
+  reliability: number;
+  reliability_parts: {
+    periods: number;
+    breadth: number;
+    stability: number;
+    weighted_dispersion: number | null;
+  };
+  /** Écart pondéré par la fiabilité. Positif = sous-coté. */
+  adjusted_discount: number | null;
+  verdict: string;
+  confidence: string;
+  periods_used: number;
+  components: number;
+  currency: string | null;
+}
+
+export interface RankingResult extends RankingStatus {
+  rows: RankingRow[];
+  failures: { symbol: string; reason: string }[];
+  method: string;
+}
+
 export interface PortfolioRow {
   symbol: string;
   name: string;
@@ -255,6 +321,11 @@ export const api = {
 
   screener: (params: Record<string, unknown>) =>
     get<{ total: number; offset: number; limit: number; rows: ScreenerRow[] }>("/screener", params),
+
+  startRanking: (peaOnly = true) =>
+    post<RankingStatus>("/screener/ranking/start", { pea_only: peaOnly }),
+
+  ranking: () => get<RankingResult>("/screener/ranking"),
 
   valuation: (symbol: string) => get<Valuation>(`/valuation/${encodeURIComponent(symbol)}`),
 

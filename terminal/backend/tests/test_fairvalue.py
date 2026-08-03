@@ -175,6 +175,63 @@ class TestVerdict:
         assert fairvalue._verdict(gap) == attendu
 
 
+class TestFondamentauxAtypiques:
+    """Un dénominateur quasi nul rend le multiple dénué de sens.
+
+    Cas réel : Huhtamäki, dont le flux de trésorerie s'était effondré à 1 % de
+    son niveau habituel sur un exercice. Le P/CF médian atteignait 1102 et
+    fabriquait à lui seul une juste valeur de 7,6 fois le cours.
+    """
+
+    def _points_with_collapse(self):
+        end = dt.date.today()
+        out = []
+        # Quatre exercices : le premier avec un flux effondré à 1 % de la norme.
+        for i, cash in enumerate([0.03, 2.5, 1.8, 2.9]):
+            period = dt.date(end.year - 4 + i, 12, 31)
+            out.append(
+                FundamentalPoint(
+                    available_from=period - dt.timedelta(days=400),
+                    period_ending=period,
+                    values={
+                        "earnings": 2.0,
+                        "sales": 40.0,
+                        "book_value": 18.0,
+                        "cash_flow": cash,
+                    },
+                )
+            )
+        return out
+
+    def test_un_exercice_effondre_ne_dicte_plus_le_multiple(self):
+        result = fairvalue.compute(_history(price=30.0), self._points_with_collapse())
+        cash = next(
+            (c for c in result["components"] if c["key"] == "cash_flow"), None
+        )
+        # Soit la composante est écartée, soit sa médiane reste raisonnable —
+        # dans tous les cas, plus de multiple à trois chiffres.
+        assert cash is None or cash["median_multiple"] < 100
+
+    def test_la_juste_valeur_reste_du_bon_ordre_de_grandeur(self):
+        result = fairvalue.compute(_history(price=30.0), self._points_with_collapse())
+        # Avec des fondamentaux stables et un cours constant, la juste valeur
+        # doit rester proche du cours, pas le multiplier par sept.
+        assert result["fair_value"] is not None
+        assert 15 < result["fair_value"] < 60
+
+    def test_un_fondamental_regulier_n_est_pas_ecarte(self):
+        """Le filtre ne doit pas mordre sur des exercices normaux."""
+        result = fairvalue.compute(_history(), _points())
+        assert {c["key"] for c in result["components"]} == {
+            "earnings", "sales", "book_value", "cash_flow"
+        }
+
+    def test_trop_peu_d_exercices_pour_juger_de_l_atypique(self):
+        """Avec deux exercices, on ne peut pas dire lequel est anormal."""
+        result = fairvalue.compute(_history(), _points(years=2))
+        assert result["fair_value"] is not None
+
+
 class TestGardeFous:
     def test_historique_trop_court_est_refuse(self):
         with pytest.raises(fairvalue.ValuationError, match="trop court"):

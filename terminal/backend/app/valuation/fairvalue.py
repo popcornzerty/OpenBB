@@ -49,6 +49,20 @@ MIN_OBSERVATIONS = 120
 #: n'écrase pas à lui seul la pondération.
 MIN_DISPERSION = 0.05
 
+#: Part de la médiane en dessous de laquelle un fondamental est jugé atypique.
+#:
+#: Un exercice où le flux de trésorerie s'effondre à 1 % de son niveau habituel
+#: produit un multiple de plusieurs centaines : le dénominateur est trop petit
+#: pour que le rapport garde un sens. Appliqué ensuite à un fondamental revenu
+#: à la normale, ce multiple fabrique une juste valeur absurde — Huhtamäki
+#: ressortait ainsi à 7,6 fois son cours. Un fondamental quasi nul est donc
+#: écarté au même titre qu'un fondamental négatif.
+MIN_FUNDAMENTAL_RATIO = 0.20
+
+#: Facteur au-delà duquel la valeur implicite d'un multiple est jugée aberrante
+#: face aux autres.
+OUTLIER_FACTOR = 5.0
+
 #: Écrêtage des multiples avant calcul de la médiane et de la dispersion.
 #:
 #: Un exercice ponctuellement déprimé (dépréciation exceptionnelle) produit un
@@ -183,8 +197,12 @@ def compute(
 
         values = fundamentals[key]
         # Un fondamental négatif ou nul ne produit pas de multiple exploitable
-        # (un exercice à perte n'a pas de PER porteur de sens).
+        # (un exercice à perte n'a pas de PER porteur de sens), et un
+        # fondamental quasi nul pas davantage.
         usable = values > 0
+        threshold = _atypical_threshold(points, key)
+        if threshold is not None:
+            usable &= values >= threshold
         multiple = (price / values).where(usable)
         observations = int(multiple.notna().sum())
         if observations < minimum:
@@ -235,6 +253,37 @@ def compute(
             "Aucun multiple exploitable : les fondamentaux publiés sont "
             f"insuffisants ou négatifs sur toute la période. {detail}".strip()
         )
+
+    # Garde-fou de second niveau : une composante dont la juste valeur
+    # implicite s'écarte radicalement des autres signale une anomalie que les
+    # filtres précédents n'ont pas attrapée. Quatre multiples ne concordent
+    # jamais parfaitement, mais un facteur cinq n'est pas un désaccord : c'est
+    # une aberration.
+    if len(components) >= 3:
+        implied = {
+            c.key: float(fair_values[c.key].dropna().iloc[-1])
+            for c in components
+            if fair_values[c.key].notna().any()
+        }
+        if len(implied) >= 3:
+            reference = float(np.median(list(implied.values())))
+            for component in list(components):
+                value = implied.get(component.key)
+                if value is None or reference <= 0:
+                    continue
+                if value > reference * OUTLIER_FACTOR or value < reference / OUTLIER_FACTOR:
+                    components.remove(component)
+                    fair_values.pop(component.key, None)
+                    excluded.append(
+                        {
+                            "key": component.key,
+                            "label": component.label,
+                            "reason": (
+                                f"Valeur implicite aberrante ({value:,.0f} contre "
+                                f"{reference:,.0f} pour les autres multiples)."
+                            ),
+                        }
+                    )
 
     # Pondération inversement proportionnelle à la volatilité du multiple.
     inverse = {c.key: 1.0 / c.dispersion for c in components}
@@ -327,6 +376,24 @@ def _round(value) -> float | None:
     except (TypeError, ValueError):
         return None
     return None if math.isnan(number) or math.isinf(number) else round(number, 4)
+
+
+def _atypical_threshold(points: list[FundamentalPoint], key: str) -> float | None:
+    """Plancher en dessous duquel un exercice est jugé atypique.
+
+    Calculé sur la médiane des exercices publiés, et non sur la série
+    quotidienne : sans cela, un exercice bref pèserait moins qu'un exercice
+    long, alors qu'ils ont la même valeur informative.
+    """
+    values = [
+        point.values.get(key)
+        for point in points
+        if point.values.get(key) is not None and point.values[key] > 0
+    ]
+    if len(values) < 3:
+        # Trop peu d'exercices pour dire ce qui est atypique.
+        return None
+    return float(np.median(values)) * MIN_FUNDAMENTAL_RATIO
 
 
 def _confidence(components: list[ComponentResult], periods: int) -> dict:

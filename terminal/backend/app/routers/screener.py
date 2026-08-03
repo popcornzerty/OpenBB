@@ -2,12 +2,34 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 
 from ..pea import registry
 from ..pea.eligibility import Eligibility
+from ..valuation import ranking
 
 router = APIRouter(prefix="/api/screener", tags=["screener"])
+
+
+@router.post("/ranking/start")
+async def start_ranking(pea_only: bool = True) -> dict:
+    """Lance le classement des sociétés de la plus à la moins sous-cotée.
+
+    Le calcul tourne en tâche de fond : compter un quart d'heure pour l'univers
+    complet à froid — c'est la source de données qui fixe le rythme, pas le
+    calcul — puis quasi instantané pendant 24 h grâce au cache.
+    """
+    if registry.is_empty:
+        raise HTTPException(
+            503, "Univers vide : lancez d'abord scripts/build_universe.py."
+        )
+    return ranking.start(pea_only=pea_only)
+
+
+@router.get("/ranking")
+async def get_ranking() -> dict:
+    """Avancement et résultat du classement."""
+    return ranking.job.result()
 
 #: ``market_cap`` est délibérément absent : trier sur une capitalisation en
 #: devise locale mettrait les valeurs danoises et suédoises en tête pour de

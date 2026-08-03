@@ -2,6 +2,9 @@ import { useEffect, useState } from "react";
 import { api, type ScreenerRow } from "../lib/api";
 import { compact } from "../lib/format";
 import { PeaBadge } from "../components/PeaBadge";
+import { Undervalued } from "./Undervalued";
+
+type Tab = "filtres" | "sous-cotees";
 
 interface Filters {
   indices: string[];
@@ -19,6 +22,7 @@ const CAP_STEPS = [
 
 /** Screener sur l'univers européen, filtre PEA actif par défaut. */
 export function Screener({ onOpen }: { onOpen: (symbol: string) => void }) {
+  const [tab, setTab] = useState<Tab>("filtres");
   const [filters, setFilters] = useState<Filters | null>(null);
   const [rows, setRows] = useState<ScreenerRow[]>([]);
   const [total, setTotal] = useState(0);
@@ -81,8 +85,32 @@ export function Screener({ onOpen }: { onOpen: (symbol: string) => void }) {
 
   const arrow = (key: string) => (sort === key ? (descending ? " ↓" : " ↑") : "");
 
+  const tabs = (
+    <div className="tabs" style={{ padding: 0, marginBottom: 4 }}>
+      <button className={tab === "filtres" ? "active" : ""} onClick={() => setTab("filtres")}>
+        Filtres
+      </button>
+      <button
+        className={tab === "sous-cotees" ? "active" : ""}
+        onClick={() => setTab("sous-cotees")}
+      >
+        Sous-cotées
+      </button>
+    </div>
+  );
+
+  if (tab === "sous-cotees") {
+    return (
+      <div className="stack">
+        {tabs}
+        <Undervalued onOpen={onOpen} />
+      </div>
+    );
+  }
+
   return (
     <div className="stack">
+      {tabs}
       <div className="panel">
         <div className="panel-head">
           <span className="panel-title">Screener européen</span>
