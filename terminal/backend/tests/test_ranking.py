@@ -125,6 +125,7 @@ class TestOrdreDuClassement:
     def _row(self, symbol, discount):
         return RankingRow(
             symbol=symbol, name=symbol, sector="", country="", index="",
+            market_cap_eur=1e9,
             last_price=100.0, fair_value=120.0, gap=-0.2, reliability=1.0,
             reliability_parts={}, adjusted_discount=discount, verdict="",
             confidence="", periods_used=5, components=3, currency="EUR",

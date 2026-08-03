@@ -79,6 +79,16 @@ def _to_float(value) -> float | None:
         return None
 
 
+def _positive_or_none(value) -> float | None:
+    """Comme ``_to_float``, mais une valeur nulle ou négative vaut absence.
+
+    Utilisé à la relecture du fichier d'univers, pour que les entrées écrites
+    avant ce garde-fou soient corrigées au chargement.
+    """
+    number = _to_float(value)
+    return number if number is not None and number > 0 else None
+
+
 def load_universe(path: Path | None = None) -> list[UniverseEntry]:
     """Charge l'univers validé depuis le disque."""
     target = path or UNIVERSE_PATH
@@ -100,8 +110,8 @@ def load_universe(path: Path | None = None) -> list[UniverseEntry]:
                     country_label=row.get("country_label", ""),
                     sector=row.get("sector", ""),
                     industry=row.get("industry", ""),
-                    market_cap=_to_float(row.get("market_cap")),
-                    market_cap_eur=_to_float(row.get("market_cap_eur")),
+                    market_cap=_positive_or_none(row.get("market_cap")),
+                    market_cap_eur=_positive_or_none(row.get("market_cap_eur")),
                     pea_status=row.get("pea_status", Eligibility.UNKNOWN.value),
                     pea_reason=row.get("pea_reason", ""),
                 )
@@ -139,7 +149,12 @@ async def describe(symbol: str, name_hint: str = "", index: str = "") -> Univers
     """Construit une entrée d'univers à partir du profil live d'un titre."""
     profile = await obb_source.profile(symbol)
     status = assess(symbol, profile.get("hq_country"))
+    # Une capitalisation nulle n'existe pas : c'est une donnée manquante que la
+    # source habille en nombre. La traiter comme absente évite qu'elle se place
+    # en tête d'un tri croissant et qu'elle s'affiche « 0 € ».
     market_cap = _to_float(profile.get("market_cap"))
+    if market_cap is not None and market_cap <= 0:
+        market_cap = None
     currency = profile.get("currency") or ""
     return UniverseEntry(
         symbol=symbol,

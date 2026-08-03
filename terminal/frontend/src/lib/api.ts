@@ -202,6 +202,8 @@ export interface RankingRow {
   sector: string;
   country: string;
   index: string;
+  /** Capitalisation en euros, comparable d'une place à l'autre. */
+  market_cap_eur: number | null;
   last_price: number;
   fair_value: number | null;
   /** Écart cours / juste valeur. Négatif = sous-coté. */

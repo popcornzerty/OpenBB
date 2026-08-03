@@ -1,6 +1,25 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, type RankingResult, type RankingRow } from "../lib/api";
-import { money, num, pct } from "../lib/format";
+import { compact, money, num, pct } from "../lib/format";
+
+/** Colonnes triables, avec le sens qui a du sens à la première sélection.
+ *
+ *  Cliquer sur « décote ajustée » doit montrer les plus sous-cotées d'abord,
+ *  et sur « titre » l'ordre alphabétique : le sens initial dépend donc de la
+ *  colonne, pas d'une règle unique. */
+const SORTS = {
+  symbol: { label: "Titre", initialDescending: false, align: "left" },
+  name: { label: "Nom", initialDescending: false, align: "left" },
+  market_cap_eur: { label: "Capitalisation", initialDescending: true, align: "right" },
+  last_price: { label: "Cours", initialDescending: true, align: "right" },
+  fair_value: { label: "Juste valeur", initialDescending: true, align: "right" },
+  gap: { label: "Écart brut", initialDescending: false, align: "right" },
+  adjusted_discount: { label: "Décote ajustée", initialDescending: true, align: "right" },
+  reliability: { label: "Fiabilité", initialDescending: true, align: "right" },
+  sector: { label: "Secteur", initialDescending: false, align: "left" },
+} as const;
+
+type SortKey = keyof typeof SORTS;
 
 /** Classement des sociétés, de la plus à la moins sous-cotée.
  *
@@ -14,6 +33,8 @@ export function Undervalued({ onOpen }: { onOpen: (symbol: string) => void }) {
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
   const [detail, setDetail] = useState<string | null>(null);
+  const [sort, setSort] = useState<SortKey>("adjusted_discount");
+  const [descending, setDescending] = useState(true);
   const timer = useRef<number | null>(null);
 
   const poll = useCallback(async () => {
@@ -52,7 +73,43 @@ export function Undervalued({ onOpen }: { onOpen: (symbol: string) => void }) {
   };
 
   const running = result?.state === "running";
-  const rows = result?.rows ?? [];
+
+  const toggleSort = (key: SortKey) => {
+    if (sort === key) {
+      setDescending((current) => !current);
+    } else {
+      setSort(key);
+      setDescending(SORTS[key].initialDescending);
+    }
+  };
+
+  const rows = useMemo(() => {
+    const source = result?.rows ?? [];
+    // Les valeurs manquantes ferment toujours la marche, quel que soit le sens
+    // du tri : les inclure dans la comparaison les ferait remonter en tête dès
+    // qu'on trie en décroissant, ce qui mettrait les lignes les moins
+    // renseignées en avant — l'inverse de l'intention.
+    const missing = (row: RankingRow) => {
+      const value = row[sort];
+      return value === null || value === undefined || value === "";
+    };
+    const present = source.filter((row) => !missing(row));
+    const absent = source.filter(missing);
+
+    present.sort((a, b) => {
+      const left = a[sort];
+      const right = b[sort];
+      const comparison =
+        typeof left === "string" && typeof right === "string"
+          ? left.localeCompare(right, "fr")
+          : Number(left) - Number(right);
+      return descending ? -comparison : comparison;
+    });
+
+    return [...present, ...absent];
+  }, [result, sort, descending]);
+
+  const arrow = (key: SortKey) => (sort === key ? (descending ? " ↓" : " ↑") : "");
 
   return (
     <div className="stack">
@@ -108,14 +165,17 @@ export function Undervalued({ onOpen }: { onOpen: (symbol: string) => void }) {
               <thead>
                 <tr>
                   <th style={{ width: 40 }}>#</th>
-                  <th>Titre</th>
-                  <th>Nom</th>
-                  <th className="right">Cours</th>
-                  <th className="right">Juste valeur</th>
-                  <th className="right">Écart brut</th>
-                  <th className="right">Décote ajustée</th>
-                  <th className="right">Fiabilité</th>
-                  <th>Secteur</th>
+                  {(Object.keys(SORTS) as SortKey[]).map((key) => (
+                    <th
+                      key={key}
+                      className={`sortable ${SORTS[key].align === "right" ? "right" : ""}`}
+                      onClick={() => toggleSort(key)}
+                      title="Trier sur cette colonne"
+                    >
+                      {SORTS[key].label}
+                      {arrow(key)}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
@@ -132,6 +192,7 @@ export function Undervalued({ onOpen }: { onOpen: (symbol: string) => void }) {
                     <td>
                       <span className="truncate dim">{row.name}</span>
                     </td>
+                    <td className="right num dim">{compact(row.market_cap_eur, "€")}</td>
                     <td className="right num">{money(row.last_price, row.currency)}</td>
                     <td className="right num dim">{money(row.fair_value, row.currency)}</td>
                     <td className={`right num ${(row.gap ?? 0) < 0 ? "up" : "down"}`}>

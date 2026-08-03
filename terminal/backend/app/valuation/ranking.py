@@ -120,6 +120,9 @@ class RankingRow:
     sector: str
     country: str
     index: str
+    #: Capitalisation en euros, reprise de l'univers. Seule grandeur
+    #: comparable d'une place à l'autre.
+    market_cap_eur: float | None
     last_price: float
     fair_value: float | None
     gap: float | None
@@ -139,6 +142,7 @@ class RankingRow:
             "sector": self.sector,
             "country": self.country,
             "index": self.index,
+            "market_cap_eur": self.market_cap_eur,
             "last_price": self.last_price,
             "fair_value": self.fair_value,
             "gap": self.gap,
@@ -250,6 +254,7 @@ async def _compute_one(symbol: str, entry, semaphore: asyncio.Semaphore) -> None
                 sector=entry.sector,
                 country=entry.country_label or "",
                 index=entry.index,
+                market_cap_eur=entry.market_cap_eur,
                 last_price=valuation.get("last_price"),
                 fair_value=valuation.get("fair_value"),
                 gap=gap,
