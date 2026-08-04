@@ -34,7 +34,17 @@ async def get_ranking() -> dict:
 #: ``market_cap`` est délibérément absent : trier sur une capitalisation en
 #: devise locale mettrait les valeurs danoises et suédoises en tête pour de
 #: simples raisons de change. Seule la version en euros est comparable.
-SORT_KEYS = {"symbol", "name", "market_cap_eur", "country_iso", "sector", "index"}
+SORT_KEYS = {
+    "symbol",
+    "name",
+    "market_cap_eur",
+    "country_iso",
+    "sector",
+    "index",
+    "dividend_yield",
+    "next_ex_date",
+    "dividend_safety",
+}
 
 
 @router.get("/filters")
@@ -97,6 +107,16 @@ async def screen(
 
     sort_key = sort if sort in SORT_KEYS else "market_cap"
 
+    #: Trier la sûreté du dividende par gravité et non par ordre alphabétique,
+    #: qui placerait « non_couvert » avant « sûr » sans que cela signifie rien.
+    severity = {"sur": 0, "tendu": 1, "non_couvert": 2, "inconnu": 3, "aucun": 4}
+
+    def sort_value(entry):
+        value = getattr(entry, sort_key)
+        if sort_key == "dividend_safety":
+            return severity.get(value, 9)
+        return value
+
     def missing(entry) -> bool:
         value = getattr(entry, sort_key)
         return value is None or value == ""
@@ -107,7 +127,7 @@ async def screen(
     # renseignées en avant — exactement l'inverse de l'intention.
     present = [e for e in rows if not missing(e)]
     absent = [e for e in rows if missing(e)]
-    present.sort(key=lambda e: getattr(e, sort_key), reverse=descending)
+    present.sort(key=sort_value, reverse=descending)
     absent.sort(key=lambda e: e.symbol)
     rows = present + absent
 

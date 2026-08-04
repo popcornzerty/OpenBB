@@ -136,9 +136,20 @@ export interface ScreenerRow {
   industry: string;
   market_cap: number | null;
   market_cap_eur: number | null;
+  /** Rendement du dividende, en fraction (0,047 pour 4,7 %). */
+  dividend_yield: number | null;
+  payout_ratio: number | null;
+  fcf_coverage: number | null;
+  dividend_safety: DividendSafety;
+  dividend_safety_reason: string;
+  dividend_frequency: string;
+  /** Prochain détachement **estimé** d'après le rythme passé. */
+  next_ex_date: string;
   pea_status: PeaStatus;
   pea_reason: string;
 }
+
+export type DividendSafety = "sur" | "tendu" | "non_couvert" | "inconnu" | "aucun";
 
 export interface ValuationComponent {
   key: string;

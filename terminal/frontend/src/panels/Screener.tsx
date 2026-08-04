@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, type ScreenerRow } from "../lib/api";
-import { compact } from "../lib/format";
+import { compact, date, pct } from "../lib/format";
+import { DividendBadge } from "../components/DividendBadge";
 import { PeaBadge } from "../components/PeaBadge";
 import { Undervalued } from "./Undervalued";
 
@@ -79,7 +80,9 @@ export function Screener({ onOpen }: { onOpen: (symbol: string) => void }) {
       setDescending((d) => !d);
     } else {
       setSort(key);
-      setDescending(key === "market_cap_eur");
+      // Le sens initial dépend de la colonne : un rendement se lit du plus
+      // élevé au plus faible, une échéance du plus proche au plus lointain.
+      setDescending(key === "market_cap_eur" || key === "dividend_yield");
     }
   };
 
@@ -183,6 +186,15 @@ export function Screener({ onOpen }: { onOpen: (symbol: string) => void }) {
                 <th>PEA</th>
                 <th className="sortable" onClick={() => toggleSort("country_iso")}>Siège{arrow("country_iso")}</th>
                 <th className="sortable" onClick={() => toggleSort("sector")}>Secteur{arrow("sector")}</th>
+                <th className="right sortable" onClick={() => toggleSort("dividend_yield")}>
+                  Rendement{arrow("dividend_yield")}
+                </th>
+                <th className="sortable" onClick={() => toggleSort("dividend_safety")}>
+                  Sûreté{arrow("dividend_safety")}
+                </th>
+                <th className="sortable" onClick={() => toggleSort("next_ex_date")}>
+                  Prochain détach.{arrow("next_ex_date")}
+                </th>
                 <th className="sortable" onClick={() => toggleSort("index")}>Indice{arrow("index")}</th>
                 <th className="right sortable" onClick={() => toggleSort("market_cap_eur")}>
                   Capitalisation{arrow("market_cap_eur")}
@@ -197,6 +209,25 @@ export function Screener({ onOpen }: { onOpen: (symbol: string) => void }) {
                   <td><PeaBadge status={row.pea_status} reason={row.pea_reason} compact /></td>
                   <td className="dim">{row.country_label || "—"}</td>
                   <td className="dim">{row.sector || "—"}</td>
+                  {/* Un rendement de dividende n'est jamais négatif : le signe
+                      que `pct` ajoute n'apporte rien et alourdit la colonne. */}
+                  <td className="right num">{pct(row.dividend_yield, 2).replace("+", "")}</td>
+                  <td>
+                    <DividendBadge
+                      safety={row.dividend_safety}
+                      reason={row.dividend_safety_reason}
+                    />
+                  </td>
+                  <td
+                    className="faint num"
+                    title={
+                      row.next_ex_date
+                        ? `Estimation d'après un rythme ${row.dividend_frequency}. Aucune source gratuite ne publie le calendrier à venir.`
+                        : undefined
+                    }
+                  >
+                    {row.next_ex_date ? `≈ ${date(row.next_ex_date)}` : "—"}
+                  </td>
                   <td className="faint">{row.index || "—"}</td>
                   <td className="right num">{compact(row.market_cap_eur, "€")}</td>
                 </tr>

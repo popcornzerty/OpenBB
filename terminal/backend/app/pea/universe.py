@@ -19,6 +19,7 @@ from pathlib import Path
 
 from ..providers import ecb_fx, obb_source
 from ..settings import DATA_DIR
+from .dividends import Safety, fcf_coverage, frequency, next_ex_date, safety
 from .eligibility import Eligibility, assess
 
 UNIVERSE_PATH = DATA_DIR / "universe_eu.csv"
@@ -36,6 +37,13 @@ _FIELDS = [
     "industry",
     "market_cap",
     "market_cap_eur",
+    "dividend_yield",
+    "payout_ratio",
+    "fcf_coverage",
+    "dividend_safety",
+    "dividend_safety_reason",
+    "dividend_frequency",
+    "next_ex_date",
     "pea_status",
     "pea_reason",
 ]
@@ -59,6 +67,16 @@ class UniverseEntry:
     #: Capitalisation ramenée en euros — seule grandeur comparable d'une place
     #: à l'autre, et donc la seule sur laquelle trier ou filtrer.
     market_cap_eur: float | None = None
+    #: Rendement du dividende, en fraction (0,047 pour 4,7 %).
+    dividend_yield: float | None = None
+    payout_ratio: float | None = None
+    #: Part du flux de trésorerie libre absorbée par le dividende.
+    fcf_coverage: float | None = None
+    dividend_safety: str = Safety.UNKNOWN.value
+    dividend_safety_reason: str = ""
+    dividend_frequency: str = ""
+    #: Prochain détachement **estimé** à partir du rythme passé.
+    next_ex_date: str = ""
     pea_status: str = Eligibility.UNKNOWN.value
     pea_reason: str = ""
 
@@ -112,6 +130,13 @@ def load_universe(path: Path | None = None) -> list[UniverseEntry]:
                     industry=row.get("industry", ""),
                     market_cap=_positive_or_none(row.get("market_cap")),
                     market_cap_eur=_positive_or_none(row.get("market_cap_eur")),
+                    dividend_yield=_to_float(row.get("dividend_yield")),
+                    payout_ratio=_to_float(row.get("payout_ratio")),
+                    fcf_coverage=_to_float(row.get("fcf_coverage")),
+                    dividend_safety=row.get("dividend_safety") or Safety.UNKNOWN.value,
+                    dividend_safety_reason=row.get("dividend_safety_reason", ""),
+                    dividend_frequency=row.get("dividend_frequency", ""),
+                    next_ex_date=row.get("next_ex_date", ""),
                     pea_status=row.get("pea_status", Eligibility.UNKNOWN.value),
                     pea_reason=row.get("pea_reason", ""),
                 )
@@ -145,10 +170,64 @@ def load_seed(path: Path | None = None) -> list[tuple[str, str, str]]:
     return rows
 
 
+async def _dividend_facts(symbol: str) -> dict:
+    """Rendement, sûreté et prochaine échéance d'un titre.
+
+    Chaque source est interrogée séparément et son échec toléré : un titre sans
+    tableau de flux exploitable doit conserver son rendement, quitte à ce que
+    la sûreté reste indéterminée.
+    """
+    facts: dict = {
+        "dividend_yield": None,
+        "payout_ratio": None,
+        "fcf_coverage": None,
+        "dividend_safety": Safety.UNKNOWN.value,
+        "dividend_safety_reason": "",
+        "dividend_frequency": "",
+        "next_ex_date": "",
+    }
+
+    try:
+        metrics = await obb_source.metrics(symbol)
+        facts["dividend_yield"] = metrics.get("dividend_yield")
+        facts["payout_ratio"] = metrics.get("payout_ratio")
+    except Exception:  # noqa: BLE001
+        metrics = {}
+
+    try:
+        statements = await obb_source.statements(symbol, period="annual", limit=1)
+        cash = (statements.get("cash") or [{}])[0]
+        coverage = fcf_coverage(
+            cash.get("free_cash_flow"), cash.get("cash_dividends_paid")
+        )
+        facts["fcf_coverage"] = coverage
+    except Exception:  # noqa: BLE001
+        coverage = None
+
+    verdict, reason = safety(
+        facts["payout_ratio"], facts["fcf_coverage"], facts["dividend_yield"]
+    )
+    facts["dividend_safety"] = verdict.value
+    facts["dividend_safety_reason"] = reason
+
+    if verdict is not Safety.NONE:
+        try:
+            rows = await obb_source.dividends(symbol)
+            dates = [row.get("ex_dividend_date") for row in rows]
+            facts["dividend_frequency"] = frequency(dates)[0]
+            upcoming = next_ex_date(dates)
+            facts["next_ex_date"] = upcoming.isoformat() if upcoming else ""
+        except Exception:  # noqa: BLE001
+            pass
+
+    return facts
+
+
 async def describe(symbol: str, name_hint: str = "", index: str = "") -> UniverseEntry:
     """Construit une entrée d'univers à partir du profil live d'un titre."""
     profile = await obb_source.profile(symbol)
     status = assess(symbol, profile.get("hq_country"))
+    dividend = await _dividend_facts(symbol)
     # Une capitalisation nulle n'existe pas : c'est une donnée manquante que la
     # source habille en nombre. La traiter comme absente évite qu'elle se place
     # en tête d'un tri croissant et qu'elle s'affiche « 0 € ».
@@ -168,6 +247,7 @@ async def describe(symbol: str, name_hint: str = "", index: str = "") -> Univers
         industry=profile.get("industry_category") or "",
         market_cap=market_cap,
         market_cap_eur=await ecb_fx.to_eur(market_cap, currency),
+        **dividend,
         pea_status=status.status.value,
         pea_reason=status.reason,
     )

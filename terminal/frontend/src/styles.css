@@ -387,6 +387,32 @@ th.right {
   border-color: var(--border);
 }
 
+/* Sûreté du dividende — mêmes teintes que le badge PEA, pour que le vert
+   veuille dire la même chose partout dans l'application. */
+.badge.dividend-sur {
+  color: var(--up);
+  background: rgba(46, 208, 138, 0.1);
+  border-color: rgba(46, 208, 138, 0.28);
+}
+
+.badge.dividend-tendu {
+  color: var(--amber);
+  background: rgba(255, 180, 84, 0.1);
+  border-color: rgba(255, 180, 84, 0.28);
+}
+
+.badge.dividend-non_couvert {
+  color: var(--down);
+  background: rgba(255, 107, 107, 0.1);
+  border-color: rgba(255, 107, 107, 0.28);
+}
+
+.badge.dividend-inconnu {
+  color: var(--text-faint);
+  background: var(--bg-raised);
+  border-color: var(--border);
+}
+
 /* ---------- Tuiles de chiffres clés ---------- */
 
 .kpis {
