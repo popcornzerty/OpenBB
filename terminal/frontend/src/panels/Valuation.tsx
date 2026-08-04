@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { api, type Valuation as ValuationData } from "../lib/api";
 import { Chart, type ChartSeries } from "../components/Chart";
 import { DividendBadge } from "../components/DividendBadge";
-import { date, money, num, pct } from "../lib/format";
+import { date, num, pct, price } from "../lib/format";
 
 const VERDICT_COLOR: Record<string, string> = {
   "sous-évalué": "var(--up)",
@@ -92,12 +92,12 @@ export function Valuation({ symbol }: { symbol: string }) {
           <div className="kpis" style={{ marginBottom: 13 }}>
             <div className="kpi">
               <div className="label">Cours</div>
-              <div className="value">{money(data.last_price, data.currency)}</div>
+              <div className="value">{price(data.last_price, data.currency)}</div>
             </div>
             <div className="kpi">
               <div className="label">Juste valeur estimée</div>
               <div className="value" style={{ color: "var(--amber)" }}>
-                {money(data.fair_value, data.currency)}
+                {price(data.fair_value, data.currency)}
               </div>
             </div>
             <div className="kpi">

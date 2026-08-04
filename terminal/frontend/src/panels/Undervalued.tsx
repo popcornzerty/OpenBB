@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, type RankingResult, type RankingRow } from "../lib/api";
-import { compact, money, num, pct } from "../lib/format";
+import { compact, num, pct, price } from "../lib/format";
 
 /** Colonnes triables, avec le sens qui a du sens à la première sélection.
  *
@@ -193,8 +193,8 @@ export function Undervalued({ onOpen }: { onOpen: (symbol: string) => void }) {
                       <span className="truncate dim">{row.name}</span>
                     </td>
                     <td className="right num dim">{compact(row.market_cap_eur, "€")}</td>
-                    <td className="right num">{money(row.last_price, row.currency)}</td>
-                    <td className="right num dim">{money(row.fair_value, row.currency)}</td>
+                    <td className="right num">{price(row.last_price, row.currency)}</td>
+                    <td className="right num dim">{price(row.fair_value, row.currency)}</td>
                     <td className={`right num ${(row.gap ?? 0) < 0 ? "up" : "down"}`}>
                       {pct(row.gap)}
                     </td>

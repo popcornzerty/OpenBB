@@ -57,6 +57,30 @@ async function post<T>(path: string, params?: Record<string, unknown>): Promise<
   return response.json() as Promise<T>;
 }
 
+/** Requête avec corps JSON, pour les écritures. */
+async function send<T>(
+  method: "PUT" | "POST" | "DELETE",
+  path: string,
+  body?: unknown,
+): Promise<T> {
+  const response = await fetch(new URL(BASE + path, ORIGIN).toString(), {
+    method,
+    headers: body ? { "Content-Type": "application/json" } : undefined,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!response.ok) {
+    let detail = `${response.status}`;
+    try {
+      const parsed = await response.json();
+      if (parsed?.detail) detail = parsed.detail;
+    } catch {
+      /* corps non JSON */
+    }
+    throw new Error(detail);
+  }
+  return response.json() as Promise<T>;
+}
+
 export type PeaStatus = "eligible" | "non_eligible" | "inconnu";
 
 export interface Health {
@@ -256,15 +280,19 @@ export interface RankingResult extends RankingStatus {
   method: string;
 }
 
-export interface PortfolioRow {
+export interface PositionInput {
   symbol: string;
-  name: string;
-  currency: string;
   quantity: number;
   average_cost: number;
+  currency: string;
+  /** Date d'entrée : elle décide des dividendes comptabilisés. */
+  opened_at: string;
+  label: string;
+}
+
+export interface PortfolioRow extends PositionInput {
   cost_basis: number;
-  account_name: string;
-  snapshot_date: string;
+  name: string | null;
   price: number | null;
   /** `last` = dernier cours ; `prev_close` = clôture précédente, faute de mieux. */
   price_source?: "last" | "prev_close" | "none";
@@ -273,7 +301,18 @@ export interface PortfolioRow {
   gain_percent: number | null;
   pea_status: PeaStatus;
   pea_reason: string;
+  sector: string | null;
   country_label: string | null;
+  dividend?: {
+    accrued: {
+      amount: number | null;
+      per_share: number | null;
+      payments: number;
+      last: string | null;
+    };
+    next_ex_date: string | null;
+    next_estimated_amount: number | null;
+  };
 }
 
 export interface PortfolioSummary {
@@ -284,7 +323,39 @@ export interface PortfolioSummary {
   total_gain_percent: number | null;
   confirmed_pea_value: number;
   confirmed_pea_share: number | null;
-  snapshot_date: string | null;
+  /** Cumul des dividendes détachés depuis l'entrée en position. */
+  dividends_collected: number;
+  dividend_yield_on_cost: number | null;
+  upcoming: { symbol: string; date: string; amount: number | null }[];
+}
+
+export interface AllocationSlice {
+  label: string;
+  value: number;
+  share: number;
+  contributors: string[];
+}
+
+export interface AllocationComparison {
+  label: string;
+  share: number;
+  value: number;
+  target: number | null;
+  gap: number | null;
+}
+
+export interface Allocation {
+  total: number;
+  sectors: AllocationSlice[];
+  regions: AllocationSlice[];
+  look_through_value: number;
+  look_through_share: number;
+  classified_share: number;
+  note: string;
+  targets: { sectors: Record<string, number>; regions: Record<string, number> };
+  sector_comparison: AllocationComparison[];
+  region_comparison: AllocationComparison[];
+  targets_total: { sectors: number; regions: number };
 }
 
 export const api = {
@@ -292,16 +363,42 @@ export const api = {
 
   portfolioStatus: () =>
     get<{
-      available: boolean;
-      database: string;
-      accounts: { id: string; name: string; currency: string; tracking_mode: string }[];
-      hint: string | null;
+      positions: number;
+      updated_at: string;
+      today: string;
+      wealthfolio: { available: boolean; database: string; positions: number };
     }>("/portfolio/status"),
 
   portfolio: () =>
-    get<{ rows: PortfolioRow[]; summary: PortfolioSummary; source: string }>(
-      "/portfolio/holdings",
+    get<{
+      rows: PortfolioRow[];
+      summary: PortfolioSummary | null;
+      updated_at: string;
+      empty: boolean;
+    }>("/portfolio/holdings"),
+
+  savePosition: (symbol: string, position: PositionInput) =>
+    send<{ count: number }>("PUT", `/portfolio/positions/${encodeURIComponent(symbol)}`, position),
+
+  deletePosition: (symbol: string) =>
+    send<{ count: number }>("DELETE", `/portfolio/positions/${encodeURIComponent(symbol)}`),
+
+  importCsv: (content: string, replace = true) =>
+    send<{ count: number; imported: number; warnings: string[] }>(
+      "POST",
+      "/portfolio/positions/import-csv",
+      { content, replace },
     ),
+
+  importWealthfolio: () =>
+    post<{ count: number; imported: number }>("/portfolio/positions/import-wealthfolio", {
+      replace: true,
+    }),
+
+  allocation: () => get<Allocation>("/portfolio/allocation"),
+
+  saveTargets: (sectors: Record<string, number>, regions: Record<string, number>) =>
+    send<Allocation["targets"]>("PUT", "/portfolio/targets", { sectors, regions }),
 
   search: (q: string, limit = 12) =>
     get<{ query: string; is_isin: boolean; results: SearchResult[] }>("/search", { q, limit }),

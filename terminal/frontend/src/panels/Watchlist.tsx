@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, type Quote } from "../lib/api";
-import { changeClass, compact, money, num, pct, time } from "../lib/format";
+import { changeClass, compact, num, pct, price, time } from "../lib/format";
 
 /** Listes de suivi : cotations d'un lot de titres, rafraîchies en continu. */
 export function Watchlist({ onOpen }: { onOpen: (symbol: string) => void }) {
@@ -108,7 +108,7 @@ export function Watchlist({ onOpen }: { onOpen: (symbol: string) => void }) {
                       <td>
                         <span className="truncate dim">{quote.name ?? "—"}</span>
                       </td>
-                      <td className="right num">{money(quote.last_price, quote.currency)}</td>
+                      <td className="right num">{price(quote.last_price, quote.currency)}</td>
                       <td className={`right num ${changeClass(variation)}`}>{pct(variation)}</td>
                       <td className="right num dim">{num(quote.open)}</td>
                       <td className="right num dim">{num(quote.high)}</td>

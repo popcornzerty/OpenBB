@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { api, type Candle, type Company as CompanyData } from "../lib/api";
 import { Chart, type ChartSeries } from "../components/Chart";
 import { PeaBadge } from "../components/PeaBadge";
-import { changeClass, compact, date, money, num, pct } from "../lib/format";
+import { changeClass, compact, date, num, pct, price } from "../lib/format";
 
 const RANGES = [
   { label: "1 M", days: 30 },
@@ -99,7 +99,7 @@ export function Company({ symbol }: { symbol: string }) {
             </div>
             <div style={{ textAlign: "right" }}>
               <div className="num" style={{ fontSize: 26 }}>
-                {money(quote?.last_price ?? null, currency)}
+                {price(quote?.last_price ?? null, currency)}
               </div>
               <div className={`num ${changeClass(variation)}`} style={{ fontSize: 15 }}>
                 {pct(variation)}
@@ -232,7 +232,7 @@ export function Company({ symbol }: { symbol: string }) {
                 {dividends.slice().reverse().slice(0, 40).map((row) => (
                   <tr key={row.ex_dividend_date}>
                     <td>{date(row.ex_dividend_date)}</td>
-                    <td className="right num">{money(row.amount, currency)}</td>
+                    <td className="right num">{price(row.amount, currency)}</td>
                   </tr>
                 ))}
                 {dividends.length === 0 && (
@@ -319,7 +319,7 @@ function StatementTable({
                 const perShare = key === "diluted_earnings_per_share";
                 return (
                   <td key={i} className="right num">
-                    {perShare ? money(value, currency) : compact(value, currency ?? "")}
+                    {perShare ? price(value, currency) : compact(value, currency ?? "")}
                   </td>
                 );
               })}
