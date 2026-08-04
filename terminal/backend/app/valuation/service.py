@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import datetime as dt
 
+from ..pea.dividends import dividend_growth, fcf_coverage, next_ex_date, safety
 from ..providers import obb_source
 from ..settings import settings
 from . import fairvalue, quality
@@ -46,12 +47,46 @@ async def valuation_for(symbol: str) -> dict:
             "(nombre d'actions ou comptes manquants)."
         )
 
+    # Le dividende éclaire la valorisation : une décote sur un titre dont le
+    # dividende progresse ne se lit pas comme la même décote sur un titre qui
+    # le rabote. L'échec de cette collecte ne doit pas priver de la courbe.
+    dividend_block: dict | None = None
+    try:
+        rows = await obb_source.dividends(symbol)
+        cagr, window = dividend_growth(rows)
+        coverage = None
+        cash_rows = statements.get("cash") or []
+        if cash_rows:
+            coverage = fcf_coverage(
+                cash_rows[0].get("free_cash_flow"),
+                cash_rows[0].get("cash_dividends_paid"),
+            )
+        verdict, verdict_reason = safety(
+            metrics_data.get("payout_ratio"), coverage, metrics_data.get("dividend_yield")
+        )
+        upcoming = next_ex_date([r.get("ex_dividend_date") for r in rows])
+        dividend_block = {
+            "yield": metrics_data.get("dividend_yield"),
+            "growth": round(cagr, 4) if cagr is not None else None,
+            "growth_window": window,
+            "payout_ratio": metrics_data.get("payout_ratio"),
+            "fcf_coverage": (
+                None if coverage is None or coverage == float("inf") else round(coverage, 3)
+            ),
+            "safety": verdict.value,
+            "safety_reason": verdict_reason,
+            "next_ex_date": upcoming.isoformat() if upcoming else None,
+        }
+    except Exception:  # noqa: BLE001
+        dividend_block = None
+
     quality_score = quality.compute(statements, metrics_data)
     result = fairvalue.compute(
         history, points, quality_score, sector=profile_data.get("sector")
     )
     result["symbol"] = symbol
     result["name"] = profile_data.get("name") or symbol
+    result["dividend"] = dividend_block
     result["currency"] = profile_data.get("currency") or metrics_data.get("currency")
     result["periods_used"] = [
         {

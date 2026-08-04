@@ -42,6 +42,7 @@ SORT_KEYS = {
     "sector",
     "index",
     "dividend_yield",
+    "dividend_cagr",
     "next_ex_date",
     "dividend_safety",
 }

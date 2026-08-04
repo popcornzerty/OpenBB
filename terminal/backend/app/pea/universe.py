@@ -19,7 +19,14 @@ from pathlib import Path
 
 from ..providers import ecb_fx, obb_source
 from ..settings import DATA_DIR
-from .dividends import Safety, fcf_coverage, frequency, next_ex_date, safety
+from .dividends import (
+    Safety,
+    dividend_growth,
+    fcf_coverage,
+    frequency,
+    next_ex_date,
+    safety,
+)
 from .eligibility import Eligibility, assess
 
 UNIVERSE_PATH = DATA_DIR / "universe_eu.csv"
@@ -38,6 +45,8 @@ _FIELDS = [
     "market_cap",
     "market_cap_eur",
     "dividend_yield",
+    "dividend_cagr",
+    "dividend_cagr_window",
     "payout_ratio",
     "fcf_coverage",
     "dividend_safety",
@@ -69,6 +78,10 @@ class UniverseEntry:
     market_cap_eur: float | None = None
     #: Rendement du dividende, en fraction (0,047 pour 4,7 %).
     dividend_yield: float | None = None
+    #: Croissance annualisée du dividende sur la dernière période continue.
+    dividend_cagr: float | None = None
+    #: Période retenue, par exemple « 2020–2025 ».
+    dividend_cagr_window: str = ""
     payout_ratio: float | None = None
     #: Part du flux de trésorerie libre absorbée par le dividende.
     fcf_coverage: float | None = None
@@ -131,6 +144,8 @@ def load_universe(path: Path | None = None) -> list[UniverseEntry]:
                     market_cap=_positive_or_none(row.get("market_cap")),
                     market_cap_eur=_positive_or_none(row.get("market_cap_eur")),
                     dividend_yield=_to_float(row.get("dividend_yield")),
+                    dividend_cagr=_to_float(row.get("dividend_cagr")),
+                    dividend_cagr_window=row.get("dividend_cagr_window", ""),
                     payout_ratio=_to_float(row.get("payout_ratio")),
                     fcf_coverage=_to_float(row.get("fcf_coverage")),
                     dividend_safety=row.get("dividend_safety") or Safety.UNKNOWN.value,
@@ -179,6 +194,8 @@ async def _dividend_facts(symbol: str) -> dict:
     """
     facts: dict = {
         "dividend_yield": None,
+        "dividend_cagr": None,
+        "dividend_cagr_window": "",
         "payout_ratio": None,
         "fcf_coverage": None,
         "dividend_safety": Safety.UNKNOWN.value,
@@ -217,6 +234,9 @@ async def _dividend_facts(symbol: str) -> dict:
             facts["dividend_frequency"] = frequency(dates)[0]
             upcoming = next_ex_date(dates)
             facts["next_ex_date"] = upcoming.isoformat() if upcoming else ""
+            cagr, window = dividend_growth(rows)
+            facts["dividend_cagr"] = cagr
+            facts["dividend_cagr_window"] = window
         except Exception:  # noqa: BLE001
             pass
 

@@ -119,6 +119,88 @@ def safety(
     return verdict, " ; ".join(reasons).capitalize() + "."
 
 
+#: Profondeur maximale de la croissance annualisée, en intervalles.
+GROWTH_MAX_YEARS = 5
+
+#: Nombre minimal d'années complètes pour qu'une croissance ait un sens.
+GROWTH_MIN_YEARS = 3
+
+#: Au-delà, le dernier exercice complet est trop ancien : la croissance
+#: décrirait un dividende que la société ne verse plus.
+GROWTH_STALE_YEARS = 2
+
+
+def yearly_totals(rows: list[dict]) -> dict[int, float]:
+    """Somme des dividendes versés par année civile.
+
+    L'agrégation annuelle est indispensable : comparer des versements
+    individuels donnerait n'importe quoi pour une société passée de deux à
+    quatre acomptes par an, alors que le total versé, lui, reste comparable.
+    """
+    totals: dict[int, float] = {}
+    for row in rows:
+        raw_date = row.get("ex_dividend_date")
+        amount = row.get("amount")
+        if raw_date is None or amount is None:
+            continue
+        try:
+            year = int(str(raw_date)[:4])
+            totals[year] = totals.get(year, 0.0) + float(amount)
+        except (TypeError, ValueError):
+            continue
+    return totals
+
+
+def dividend_growth(
+    rows: list[dict], today: dt.date | None = None
+) -> tuple[float | None, str]:
+    """Croissance annualisée du dividende, avec la période retenue.
+
+    Deux précautions décident du résultat :
+
+    L'année en cours est **exclue** — elle n'est pas terminée, et son total
+    partiel ferait apparaître une chute qui n'existe pas.
+
+    La période retenue est la plus longue suite d'années **contiguës** se
+    terminant au dernier exercice complet. Sans cela, une société ayant
+    interrompu son dividende verrait comparer deux années séparées par un
+    trou : Stellantis, qui n'a rien versé de 2012 à 2020, affichait ainsi
+    +50 % l'an alors que son dividende a été divisé par trois depuis 2021.
+    """
+    today = today or dt.date.today()
+    totals = yearly_totals(rows)
+    complete = sorted(y for y in totals if y < today.year)
+    if not complete:
+        return None, ""
+
+    last = complete[-1]
+    if today.year - last > GROWTH_STALE_YEARS:
+        return None, ""
+
+    # On remonte tant que les années se suivent sans interruption.
+    run = [last]
+    while len(run) <= GROWTH_MAX_YEARS:
+        previous = run[0] - 1
+        if previous not in totals:
+            break
+        run.insert(0, previous)
+
+    if len(run) < GROWTH_MIN_YEARS:
+        return None, ""
+
+    start, end = totals[run[0]], totals[run[-1]]
+    if start <= 0 or end <= 0:
+        return None, ""
+
+    periods = len(run) - 1
+    try:
+        cagr = (end / start) ** (1 / periods) - 1
+    except (ValueError, ZeroDivisionError, OverflowError):
+        return None, ""
+
+    return cagr, f"{run[0]}–{run[-1]}"
+
+
 def _parse_dates(raw: list) -> list[dt.date]:
     dates: list[dt.date] = []
     for value in raw:

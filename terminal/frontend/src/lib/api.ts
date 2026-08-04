@@ -138,6 +138,10 @@ export interface ScreenerRow {
   market_cap_eur: number | null;
   /** Rendement du dividende, en fraction (0,047 pour 4,7 %). */
   dividend_yield: number | null;
+  /** Croissance annualisée sur la dernière période continue. */
+  dividend_cagr: number | null;
+  /** Période retenue, par exemple « 2020–2025 ». */
+  dividend_cagr_window: string;
   payout_ratio: number | null;
   fcf_coverage: number | null;
   dividend_safety: DividendSafety;
@@ -193,6 +197,16 @@ export interface Valuation {
   method: string;
   periods_used: { period_ending: string; available_from: string }[];
   as_of: string;
+  dividend: {
+    yield: number | null;
+    growth: number | null;
+    growth_window: string;
+    payout_ratio: number | null;
+    fcf_coverage: number | null;
+    safety: DividendSafety;
+    safety_reason: string;
+    next_ex_date: string | null;
+  } | null;
 }
 
 export interface RankingStatus {

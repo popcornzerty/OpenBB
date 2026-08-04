@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, type Valuation as ValuationData } from "../lib/api";
 import { Chart, type ChartSeries } from "../components/Chart";
+import { DividendBadge } from "../components/DividendBadge";
 import { date, money, num, pct } from "../lib/format";
 
 const VERDICT_COLOR: Record<string, string> = {
@@ -140,6 +141,65 @@ export function Valuation({ symbol }: { symbol: string }) {
               </li>
             )}
           </ul>
+        </div>
+      )}
+
+      {data.dividend && data.dividend.safety !== "aucun" && (
+        <div className="panel">
+          <div className="panel-head">
+            <span className="panel-title">Dividende</span>
+            <span className="spacer" style={{ flex: 1 }} />
+            <DividendBadge
+              safety={data.dividend.safety}
+              reason={data.dividend.safety_reason}
+            />
+          </div>
+          <div className="panel-body">
+            <div className="kpis">
+              <div className="kpi">
+                <div className="label">Rendement</div>
+                <div className="value">
+                  {pct(data.dividend.yield, 2).replace("+", "")}
+                </div>
+              </div>
+              <div className="kpi">
+                <div className="label">
+                  Croissance annualisée
+                  {data.dividend.growth_window && ` · ${data.dividend.growth_window}`}
+                </div>
+                <div
+                  className={`value ${(data.dividend.growth ?? 0) >= 0 ? "up" : "down"}`}
+                >
+                  {pct(data.dividend.growth, 1)}
+                </div>
+              </div>
+              <div className="kpi">
+                <div className="label">Taux de distribution</div>
+                <div className="value">
+                  {pct(data.dividend.payout_ratio, 0).replace("+", "")}
+                </div>
+              </div>
+              <div className="kpi">
+                <div className="label">Flux libre absorbé</div>
+                <div className="value">
+                  {pct(data.dividend.fcf_coverage, 0).replace("+", "")}
+                </div>
+              </div>
+              <div className="kpi">
+                <div className="label">Prochain détachement</div>
+                <div className="value" style={{ fontSize: 13 }}>
+                  {data.dividend.next_ex_date
+                    ? `≈ ${date(data.dividend.next_ex_date)}`
+                    : "—"}
+                </div>
+              </div>
+            </div>
+            <div className="note" style={{ marginTop: 10 }}>
+              {data.dividend.safety_reason} La croissance porte sur des années civiles
+              complètes et consécutives ; la date de détachement est estimée d'après le
+              rythme observé, aucune source gratuite ne publiant le calendrier à venir.
+            </div>
+          </div>
         </div>
       )}
 

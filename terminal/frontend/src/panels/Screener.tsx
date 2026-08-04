@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, type ScreenerRow } from "../lib/api";
-import { compact, date, pct } from "../lib/format";
+import { changeClass, compact, date, pct } from "../lib/format";
 import { DividendBadge } from "../components/DividendBadge";
 import { PeaBadge } from "../components/PeaBadge";
 import { Undervalued } from "./Undervalued";
@@ -80,9 +80,12 @@ export function Screener({ onOpen }: { onOpen: (symbol: string) => void }) {
       setDescending((d) => !d);
     } else {
       setSort(key);
-      // Le sens initial dépend de la colonne : un rendement se lit du plus
-      // élevé au plus faible, une échéance du plus proche au plus lointain.
-      setDescending(key === "market_cap_eur" || key === "dividend_yield");
+      // Le sens initial dépend de la colonne : un rendement ou une croissance
+      // se lisent du plus élevé au plus faible, une échéance du plus proche au
+      // plus lointain, un nom par ordre alphabétique.
+      setDescending(
+        ["market_cap_eur", "dividend_yield", "dividend_cagr"].includes(key),
+      );
     }
   };
 
@@ -186,6 +189,9 @@ export function Screener({ onOpen }: { onOpen: (symbol: string) => void }) {
                 <th>PEA</th>
                 <th className="sortable" onClick={() => toggleSort("country_iso")}>Siège{arrow("country_iso")}</th>
                 <th className="sortable" onClick={() => toggleSort("sector")}>Secteur{arrow("sector")}</th>
+                <th className="right sortable" onClick={() => toggleSort("dividend_cagr")}>
+                  Crois. div.{arrow("dividend_cagr")}
+                </th>
                 <th className="right sortable" onClick={() => toggleSort("dividend_yield")}>
                   Rendement{arrow("dividend_yield")}
                 </th>
@@ -209,6 +215,16 @@ export function Screener({ onOpen }: { onOpen: (symbol: string) => void }) {
                   <td><PeaBadge status={row.pea_status} reason={row.pea_reason} compact /></td>
                   <td className="dim">{row.country_label || "—"}</td>
                   <td className="dim">{row.sector || "—"}</td>
+                  <td
+                    className={`right num ${changeClass(row.dividend_cagr)}`}
+                    title={
+                      row.dividend_cagr_window
+                        ? `Croissance annualisée sur ${row.dividend_cagr_window}, années civiles complètes et consécutives.`
+                        : undefined
+                    }
+                  >
+                    {pct(row.dividend_cagr, 1)}
+                  </td>
                   {/* Un rendement de dividende n'est jamais négatif : le signe
                       que `pct` ajoute n'apporte rien et alourdit la colonne. */}
                   <td className="right num">{pct(row.dividend_yield, 2).replace("+", "")}</td>

@@ -12,10 +12,12 @@ import pytest
 
 from app.pea.dividends import (
     Safety,
+    dividend_growth,
     fcf_coverage,
     frequency,
     next_ex_date,
     safety,
+    yearly_totals,
 )
 
 
@@ -133,6 +135,84 @@ class TestRythmeDeVersement:
         anciens = [f"20{y:02d}-06-01" for y in range(0, 10)]
         recents = ["2025-03-01", "2025-06-01", "2025-09-01", "2025-12-01", "2026-03-01"]
         assert frequency(anciens + recents)[0] == "trimestriel"
+
+
+class TestCroissanceDuDividende:
+    TODAY = dt.date(2026, 8, 4)
+
+    def _rows(self, per_year: dict[int, list[float]]):
+        rows = []
+        for year, amounts in per_year.items():
+            for i, amount in enumerate(amounts):
+                rows.append(
+                    {"ex_dividend_date": f"{year}-{(i * 3) + 1:02d}-15", "amount": amount}
+                )
+        return rows
+
+    def test_agregation_par_annee_civile(self):
+        """Quatre acomptes de 1 € valent un versement annuel de 4 €."""
+        totals = yearly_totals(self._rows({2024: [1.0, 1.0, 1.0, 1.0]}))
+        assert totals[2024] == pytest.approx(4.0)
+
+    def test_croissance_reguliere(self):
+        """Cas Sanofi : environ +4,5 % l'an."""
+        rows = self._rows(
+            {2020: [3.15], 2021: [3.20], 2022: [3.33], 2023: [3.56],
+             2024: [3.76], 2025: [3.92]}
+        )
+        cagr, window = dividend_growth(rows, today=self.TODAY)
+        assert cagr == pytest.approx(0.045, abs=0.005)
+        assert window == "2020–2025"
+
+    def test_l_annee_en_cours_est_exclue(self):
+        """Son total partiel ferait apparaître une chute inexistante."""
+        rows = self._rows(
+            {2022: [1.0], 2023: [1.1], 2024: [1.2], 2025: [1.3], 2026: [0.4]}
+        )
+        cagr, window = dividend_growth(rows, today=self.TODAY)
+        assert cagr is not None and cagr > 0
+        assert window.endswith("2025")
+
+    def test_un_dividende_interrompu_ne_fausse_pas_la_periode(self):
+        """Cas Stellantis : rien versé de 2012 à 2020.
+
+        Comparer 2011 à 2025 comme s'il s'agissait de cinq ans annonçait
+        +50 % l'an, alors que le dividende a fondu depuis 2021.
+        """
+        rows = self._rows(
+            {2010: [0.123], 2011: [0.090],
+             2021: [2.353], 2022: [1.040], 2023: [1.340], 2024: [1.550], 2025: [0.680]}
+        )
+        cagr, window = dividend_growth(rows, today=self.TODAY)
+        assert window == "2021–2025"
+        assert cagr is not None and cagr < 0
+
+    def test_la_fenetre_est_bornee(self):
+        """Un historique de vingt ans ne donne pas une croissance sur vingt ans."""
+        rows = self._rows({year: [1.0 + (year - 2005) * 0.1] for year in range(2005, 2026)})
+        _, window = dividend_growth(rows, today=self.TODAY)
+        start, end = window.split("–")
+        assert int(end) - int(start) == 5
+
+    def test_historique_trop_court(self):
+        rows = self._rows({2024: [1.0], 2025: [1.1]})
+        assert dividend_growth(rows, today=self.TODAY) == (None, "")
+
+    def test_dividende_arrete_depuis_longtemps(self):
+        rows = self._rows({2018: [1.0], 2019: [1.1], 2020: [1.2], 2021: [1.3]})
+        assert dividend_growth(rows, today=self.TODAY) == (None, "")
+
+    def test_sans_historique(self):
+        assert dividend_growth([], today=self.TODAY) == (None, "")
+
+    def test_croissance_negative_est_rapportee(self):
+        rows = self._rows({2021: [2.0], 2022: [1.8], 2023: [1.5], 2024: [1.2], 2025: [1.0]})
+        cagr, _ = dividend_growth(rows, today=self.TODAY)
+        assert cagr is not None and cagr < 0
+
+    def test_un_point_de_depart_nul_ne_produit_pas_de_taux(self):
+        rows = self._rows({2021: [0.0], 2022: [1.0], 2023: [1.1], 2024: [1.2], 2025: [1.3]})
+        assert dividend_growth(rows, today=self.TODAY)[0] is None
 
 
 class TestProchaineEcheance:
