@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { api, type Valuation as ValuationData } from "../lib/api";
 import { Chart, type ChartSeries } from "../components/Chart";
 import { DividendBadge } from "../components/DividendBadge";
+import { FinancialTable } from "../components/FinancialTable";
+import { MultipleHistoryChart } from "../components/MultipleHistoryChart";
 import { date, num, pct, price } from "../lib/format";
 
 const VERDICT_COLOR: Record<string, string> = {
@@ -201,6 +203,90 @@ export function Valuation({ symbol }: { symbol: string }) {
             </div>
           </div>
         </div>
+      )}
+
+      {data.per_history && <MultipleHistoryChart history={data.per_history} />}
+
+      {data.tables && data.tables.columns.length > 0 && (
+        <>
+          <FinancialTable
+            label="Compte de résultat et estimations"
+            columns={data.tables.columns}
+            rows={data.tables.income_rows}
+            currency={data.currency}
+          />
+          <FinancialTable
+            label="Valorisation par exercice"
+            columns={data.tables.columns}
+            rows={data.tables.valuation_rows}
+            currency={data.currency}
+          />
+
+          {(data.tables.price_target.mean ?? null) !== null && (
+            <div className="panel">
+              <div className="panel-head">
+                <span className="panel-title">Objectif de cours du consensus</span>
+              </div>
+              <div className="panel-body">
+                <div className="kpis">
+                  <div className="kpi">
+                    <div className="label">Objectif moyen</div>
+                    <div className="value" style={{ color: "var(--amber)" }}>
+                      {price(data.tables.price_target.mean ?? null, data.currency)}
+                    </div>
+                  </div>
+                  <div className="kpi">
+                    <div className="label">Médian</div>
+                    <div className="value">
+                      {price(data.tables.price_target.median ?? null, data.currency)}
+                    </div>
+                  </div>
+                  <div className="kpi">
+                    <div className="label">Fourchette</div>
+                    <div className="value" style={{ fontSize: 13 }}>
+                      {price(data.tables.price_target.low ?? null, data.currency)} –{" "}
+                      {price(data.tables.price_target.high ?? null, data.currency)}
+                    </div>
+                  </div>
+                  <div className="kpi">
+                    <div className="label">Potentiel</div>
+                    <div
+                      className={`value ${
+                        (data.tables.price_target.mean ?? 0) >= data.last_price ? "up" : "down"
+                      }`}
+                    >
+                      {pct(
+                        ((data.tables.price_target.mean ?? data.last_price) - data.last_price) /
+                          data.last_price,
+                        1,
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div className="note" style={{ marginTop: 10 }}>
+                  Objectifs publiés par les bureaux d'analyse, sans rapport avec la juste
+                  valeur calculée plus haut : ils reflètent un consensus de marché, pas un
+                  modèle. Les deux peuvent diverger, et cette divergence est en soi une
+                  information.
+                </div>
+              </div>
+            </div>
+          )}
+
+          {data.tables.notes.length > 0 && (
+            <div className="callout warn">
+              <strong>Limites des tableaux</strong>
+              <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
+                {data.tables.notes.map((note, i) => <li key={i}>{note}</li>)}
+                <li>
+                  La source gratuite ne publie que quatre exercices et deux années
+                  estimées. Les multiples historiques sont calculés au cours de clôture
+                  de chaque exercice, les multiples estimés au cours actuel.
+                </li>
+              </ul>
+            </div>
+          )}
+        </>
       )}
 
       <div className="grid2">

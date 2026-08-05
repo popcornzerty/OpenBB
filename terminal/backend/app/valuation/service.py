@@ -6,9 +6,9 @@ import asyncio
 import datetime as dt
 
 from ..pea.dividends import dividend_growth, fcf_coverage, next_ex_date, safety
-from ..providers import obb_source
+from ..providers import estimates, obb_source
 from ..settings import settings
-from . import fairvalue, quality
+from . import fairvalue, multiples_history, quality, tables
 from .series import build_points
 
 
@@ -20,11 +20,13 @@ async def valuation_for(symbol: str) -> dict:
         days=int(365.25 * (settings.valuation_window_years + 1))
     )
 
-    history, statements, metrics, profile = await asyncio.gather(
+    history, statements, metrics, profile, quote, consensus = await asyncio.gather(
         obb_source.historical(symbol, start_date=start.isoformat()),
         obb_source.statements(symbol, period="annual", limit=5),
         obb_source.metrics(symbol),
         obb_source.profile(symbol),
+        obb_source.quote(symbol),
+        estimates.consensus(symbol),
         return_exceptions=True,
     )
 
@@ -88,6 +90,27 @@ async def valuation_for(symbol: str) -> dict:
     result["name"] = profile_data.get("name") or symbol
     result["dividend"] = dividend_block
     result["currency"] = profile_data.get("currency") or metrics_data.get("currency")
+    # Le tableau par exercice et l'évolution du PER complètent la courbe sans
+    # en dépendre : leur échec ne doit pas priver de la juste valeur.
+    quote_data = {} if isinstance(quote, Exception) else quote
+    consensus_data = (
+        {"periods": [], "price_target": {}} if isinstance(consensus, Exception) else consensus
+    )
+    try:
+        result["tables"] = tables.build(
+            statements,
+            history,
+            consensus_data,
+            last_price=quote_data.get("last_price") or quote_data.get("prev_close"),
+        )
+    except Exception:  # noqa: BLE001
+        result["tables"] = None
+
+    try:
+        result["per_history"] = multiples_history.compute(history, points, "earnings")
+    except Exception:  # noqa: BLE001
+        result["per_history"] = None
+
     result["periods_used"] = [
         {
             "period_ending": point.period_ending.isoformat(),

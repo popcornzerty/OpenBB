@@ -197,6 +197,67 @@ export interface QualityAxis {
   detail: string;
 }
 
+/** Un exercice du tableau : publié, ou estimé par le consensus. */
+export interface TableColumn {
+  label: string;
+  year: number;
+  estimate: boolean;
+  period_ending: string | null;
+  /** Cours de référence : clôture d'exercice, ou cours actuel si estimé. */
+  price: number | null;
+  analysts: number | null;
+  thin: boolean;
+}
+
+export interface TableRow {
+  key: string;
+  label: string;
+  unit: "currency" | "percent" | "ratio" | "per_share" | "count";
+  values: (number | null)[];
+  note: string;
+}
+
+export interface ValuationTables {
+  columns: TableColumn[];
+  income_rows: TableRow[];
+  valuation_rows: TableRow[];
+  notes: string[];
+  price_target: {
+    mean?: number | null;
+    median?: number | null;
+    low?: number | null;
+    high?: number | null;
+  };
+}
+
+/** Évolution d'un multiple et sa moyenne historique. */
+export interface MultipleHistory {
+  component: string;
+  label: string;
+  series: { date: string; value: number }[];
+  current: number;
+  average: number;
+  median: number;
+  stdev: number | null;
+  gap_to_average: number;
+  gap_to_median: number;
+  band_low: number | null;
+  band_high: number | null;
+  min: number;
+  max: number;
+  observations: number;
+  coverage: number | null;
+  from: string;
+  to: string;
+  years: number;
+  backfilled_until: string | null;
+  /** Début de la période réellement adossée à des comptes publiés. */
+  reference_from: string;
+  reference_years: number;
+  reference_observations: number;
+  stats_backfilled: boolean;
+}
+
 export interface Valuation {
   symbol: string;
   name: string;
@@ -231,6 +292,8 @@ export interface Valuation {
     safety_reason: string;
     next_ex_date: string | null;
   } | null;
+  tables: ValuationTables | null;
+  per_history: MultipleHistory | null;
 }
 
 export interface RankingStatus {
