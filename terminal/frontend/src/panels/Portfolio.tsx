@@ -261,6 +261,7 @@ export function Portfolio({ onOpen }: { onOpen: (symbol: string) => void }) {
                       <th className="right">Cours</th>
                       <th className="right">Valeur</th>
                       <th className="right">+/- value</th>
+                      <th className="right">%</th>
                       <th className="right">Div. perçus</th>
                       <th>Prochain détach.</th>
                       <th style={{ width: 90 }}></th>
@@ -295,6 +296,16 @@ export function Portfolio({ onOpen }: { onOpen: (symbol: string) => void }) {
                           <td className="right num">{money(row.market_value, "EUR")}</td>
                           <td className={`right num ${changeClass(row.gain)}`}>
                             {money(row.gain, "EUR")}
+                          </td>
+                          <td
+                            className={`right num ${changeClass(row.gain_percent)}`}
+                            title={
+                              row.gain_percent === null
+                                ? "Prix de revient absent : la performance ne peut pas être calculée."
+                                : `Rapportée au prix de revient de ${money(row.cost_basis, "EUR")}`
+                            }
+                          >
+                            {pct(row.gain_percent)}
                           </td>
                           <td
                             className="right num"
@@ -439,6 +450,9 @@ function Summary({ summary }: { summary: PortfolioSummary }) {
         <Kpi
           label="Plus-value réalisée"
           value={money(summary.realized.gain, "EUR")}
+          // Rapportée au capital engagé sur les lignes vendues, pas au
+          // portefeuille : c'est le rendement des opérations closes.
+          sub={pct(summary.realized.gain_percent)}
           tone={changeClass(summary.realized.gain) as "up" | "down" | undefined}
         />
       )}
@@ -447,6 +461,7 @@ function Summary({ summary }: { summary: PortfolioSummary }) {
         <Kpi
           label="Gain total"
           value={money(summary.overall_gain, "EUR")}
+          sub={pct(summary.overall_gain_percent)}
           tone={changeClass(summary.overall_gain) as "up" | "down" | undefined}
         />
       )}
@@ -463,11 +478,23 @@ function Summary({ summary }: { summary: PortfolioSummary }) {
   );
 }
 
-function Kpi({ label, value, tone }: { label: string; value: string; tone?: "up" | "down" }) {
+function Kpi({
+  label,
+  value,
+  tone,
+  sub,
+}: {
+  label: string;
+  value: string;
+  tone?: "up" | "down";
+  /** Précision affichée sous la valeur — un pourcentage, le plus souvent. */
+  sub?: string;
+}) {
   return (
     <div className="kpi">
       <div className="label">{label}</div>
       <div className={`value ${tone ?? ""}`}>{value}</div>
+      {sub && <div className={`faint num ${tone ?? ""}`} style={{ fontSize: 11 }}>{sub}</div>}
     </div>
   );
 }

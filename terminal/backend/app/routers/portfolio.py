@@ -409,6 +409,19 @@ async def holdings(
             "overall_gain": round(
                 (total_value - total_cost) + closed["gain"] + collected, 2
             ),
+            # Rapporté au capital réellement engagé : ce qui dort encore en
+            # portefeuille plus ce qui a été investi sur les lignes vendues.
+            # Le rapporter au seul encours actuel gonflerait la performance
+            # d'un portefeuille qui a beaucoup arbitré.
+            "overall_gain_percent": (
+                round(
+                    ((total_value - total_cost) + closed["gain"] + collected)
+                    / (total_cost + closed["cost_basis"]),
+                    4,
+                )
+                if (total_cost + closed["cost_basis"])
+                else None
+            ),
             "upcoming": upcoming[:8],
         },
     }

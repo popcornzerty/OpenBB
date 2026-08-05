@@ -329,6 +329,8 @@ export interface PortfolioSummary {
   realized: RealizedTotals;
   /** Latent + réalisé + dividendes : ce que le portefeuille a rapporté. */
   overall_gain: number;
+  /** Rapporté au capital engagé, lignes vendues comprises. */
+  overall_gain_percent: number | null;
   upcoming: { symbol: string; date: string; amount: number | null }[];
 }
 
