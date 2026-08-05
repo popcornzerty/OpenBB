@@ -106,6 +106,13 @@ def _fetch(symbol: str) -> dict:
     return {
         "periods": periods,
         "fiscal_year_end": fiscal_year_end.isoformat() if fiscal_year_end else None,
+        # Bénéfice par action des douze derniers mois, exprimé dans la devise
+        # de **cotation** — donc directement comparable aux dividendes
+        # détachés. Les états financiers, eux, sont libellés dans la devise de
+        # publication : Aker BP verse en couronnes et publie en dollars, et
+        # rapporter l'un à l'autre donnait un taux de distribution de 12 000 %.
+        "trailing_eps": _number(info.get("trailingEps")),
+        "listing_currency": info.get("currency"),
         "price_target": {
             "mean": _number(targets.get("mean")),
             "median": _number(targets.get("median")),
@@ -134,9 +141,11 @@ async def consensus(symbol: str) -> dict:
                 "fiscal_year_end": None,
                 "price_target": {},
                 "currency": None,
+                "trailing_eps": None,
+                "listing_currency": None,
             }
 
-    key = f"estimates:v1:{symbol}"
+    key = f"estimates:v2:{symbol}"
     value, _, _ = await cache.resolve(key, TTL_SECONDS, produce)
     return value
 

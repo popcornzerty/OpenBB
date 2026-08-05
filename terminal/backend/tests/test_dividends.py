@@ -374,3 +374,33 @@ class TestBorneDeToleranceDuCash:
     def test_cas_deutsche_telekom(self):
         verdict, _ = safety(1.05, 0.30, 0.036)
         assert verdict is Safety.STRETCHED
+
+
+class TestCoherenceDesDevises:
+    """Le bénéfice doit être libellé dans la devise des dividendes.
+
+    Aker BP verse en couronnes norvégiennes et publie ses comptes en dollars.
+    Rapporter 25,7 NOK de dividende à 2,14 USD de bénéfice donnait un taux de
+    distribution de 1 200 % — une aberration pire que le défaut qu'elle
+    prétendait corriger.
+    """
+
+    TODAY = dt.date(2026, 8, 5)
+    AKRBP = [
+        {"ex_dividend_date": dt.date(2026, 5, 20), "amount": 6.332},
+        {"ex_dividend_date": dt.date(2026, 2, 20), "amount": 6.294},
+        {"ex_dividend_date": dt.date(2025, 11, 20), "amount": 6.129},
+        {"ex_dividend_date": dt.date(2025, 8, 20), "amount": 6.426},
+    ]
+
+    def test_bnpa_en_devise_de_cotation(self):
+        """21,22 NOK de bénéfice pour 25,18 NOK distribués."""
+        assert payout_ratio(self.AKRBP, 21.22, self.TODAY) == pytest.approx(1.19, abs=0.01)
+
+    def test_le_bnpa_des_comptes_en_devise_etrangere_est_aberrant(self):
+        """Ce que produisait le calcul avant la correction."""
+        assert payout_ratio(self.AKRBP, 2.14, self.TODAY) > 10
+
+    def test_sans_bnpa_aucun_taux_n_est_produit(self):
+        """Mieux vaut retomber sur le champ de la source qu'inventer."""
+        assert payout_ratio(self.AKRBP, None, self.TODAY) is None

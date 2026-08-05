@@ -47,6 +47,10 @@ async def valuation_for(symbol: str) -> dict:
 
     metrics_data = {} if isinstance(metrics, Exception) else metrics
     profile_data = {} if isinstance(profile, Exception) else profile
+    quote_data = {} if isinstance(quote, Exception) else quote
+    consensus_data = (
+        {"periods": [], "price_target": {}} if isinstance(consensus, Exception) else consensus
+    )
 
     points = build_points(statements)
     if not points:
@@ -70,17 +74,10 @@ async def valuation_for(symbol: str) -> dict:
                 cash_rows[0].get("cash_dividends_paid"),
             )
         # Le taux fourni par la source est parfois faux ; on le recalcule à
-        # partir des détachements observés et du bénéfice publié, et on ne
-        # retombe sur le champ d'origine que faute de mieux.
-        income_rows = statements.get("income") or []
-        eps = None
-        for row in income_rows:
-            eps = row.get("diluted_earnings_per_share") or row.get(
-                "basic_earnings_per_share"
-            )
-            if eps is not None:
-                break
-        computed = payout_ratio(rows, eps)
+        # partir des détachements observés et du bénéfice des douze derniers
+        # mois. Ce bénéfice doit venir de la même devise que les dividendes —
+        # d'où le BNPA de cotation, et non celui des états financiers.
+        computed = payout_ratio(rows, consensus_data.get("trailing_eps"))
         payout = computed if computed is not None else metrics_data.get("payout_ratio")
         verdict, verdict_reason = safety(
             payout, coverage, metrics_data.get("dividend_yield")
@@ -112,10 +109,6 @@ async def valuation_for(symbol: str) -> dict:
     result["currency"] = profile_data.get("currency") or metrics_data.get("currency")
     # Le tableau par exercice et l'évolution du PER complètent la courbe sans
     # en dépendre : leur échec ne doit pas priver de la juste valeur.
-    quote_data = {} if isinstance(quote, Exception) else quote
-    consensus_data = (
-        {"periods": [], "price_target": {}} if isinstance(consensus, Exception) else consensus
-    )
     try:
         result["tables"] = tables.build(
             statements,

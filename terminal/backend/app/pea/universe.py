@@ -17,7 +17,7 @@ import csv
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-from ..providers import ecb_fx, obb_source
+from ..providers import ecb_fx, estimates, obb_source
 from ..settings import DATA_DIR
 from .dividends import (
     Safety,
@@ -211,7 +211,6 @@ async def _dividend_facts(symbol: str) -> dict:
     except Exception:  # noqa: BLE001
         metrics = {}
 
-    eps = None
     try:
         statements = await obb_source.statements(symbol, period="annual", limit=1)
         cash = (statements.get("cash") or [{}])[0]
@@ -219,14 +218,18 @@ async def _dividend_facts(symbol: str) -> dict:
             cash.get("free_cash_flow"), cash.get("cash_dividends_paid")
         )
         facts["fcf_coverage"] = coverage
-        for row in statements.get("income") or []:
-            eps = row.get("diluted_earnings_per_share") or row.get(
-                "basic_earnings_per_share"
-            )
-            if eps is not None:
-                break
     except Exception:  # noqa: BLE001
         coverage = None
+
+    # Le bénéfice doit être libellé dans la devise des dividendes. Celui des
+    # états financiers ne l'est pas toujours — Aker BP verse en couronnes et
+    # publie en dollars — d'où le BNPA des douze derniers mois, exprimé en
+    # devise de cotation.
+    eps = None
+    try:
+        eps = (await estimates.consensus(symbol)).get("trailing_eps")
+    except Exception:  # noqa: BLE001
+        eps = None
 
     # L'historique des détachements sert au taux de distribution comme au
     # rythme : il doit donc être lu avant de rendre le verdict de sûreté.
