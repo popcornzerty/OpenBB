@@ -25,6 +25,7 @@ from .dividends import (
     fcf_coverage,
     frequency,
     next_ex_date,
+    payout_ratio,
     safety,
 )
 from .eligibility import Eligibility, assess
@@ -207,10 +208,10 @@ async def _dividend_facts(symbol: str) -> dict:
     try:
         metrics = await obb_source.metrics(symbol)
         facts["dividend_yield"] = metrics.get("dividend_yield")
-        facts["payout_ratio"] = metrics.get("payout_ratio")
     except Exception:  # noqa: BLE001
         metrics = {}
 
+    eps = None
     try:
         statements = await obb_source.statements(symbol, period="annual", limit=1)
         cash = (statements.get("cash") or [{}])[0]
@@ -218,8 +219,27 @@ async def _dividend_facts(symbol: str) -> dict:
             cash.get("free_cash_flow"), cash.get("cash_dividends_paid")
         )
         facts["fcf_coverage"] = coverage
+        for row in statements.get("income") or []:
+            eps = row.get("diluted_earnings_per_share") or row.get(
+                "basic_earnings_per_share"
+            )
+            if eps is not None:
+                break
     except Exception:  # noqa: BLE001
         coverage = None
+
+    # L'historique des détachements sert au taux de distribution comme au
+    # rythme : il doit donc être lu avant de rendre le verdict de sûreté.
+    rows: list[dict] = []
+    try:
+        rows = await obb_source.dividends(symbol)
+    except Exception:  # noqa: BLE001
+        rows = []
+
+    computed = payout_ratio(rows, eps)
+    facts["payout_ratio"] = (
+        computed if computed is not None else metrics.get("payout_ratio")
+    )
 
     verdict, reason = safety(
         facts["payout_ratio"], facts["fcf_coverage"], facts["dividend_yield"]
@@ -227,9 +247,8 @@ async def _dividend_facts(symbol: str) -> dict:
     facts["dividend_safety"] = verdict.value
     facts["dividend_safety_reason"] = reason
 
-    if verdict is not Safety.NONE:
+    if verdict is not Safety.NONE and rows:
         try:
-            rows = await obb_source.dividends(symbol)
             dates = [row.get("ex_dividend_date") for row in rows]
             facts["dividend_frequency"] = frequency(dates)[0]
             upcoming = next_ex_date(dates)

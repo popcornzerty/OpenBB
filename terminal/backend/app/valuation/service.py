@@ -5,7 +5,13 @@ from __future__ import annotations
 import asyncio
 import datetime as dt
 
-from ..pea.dividends import dividend_growth, fcf_coverage, next_ex_date, safety
+from ..pea.dividends import (
+    dividend_growth,
+    fcf_coverage,
+    next_ex_date,
+    payout_ratio,
+    safety,
+)
 from ..providers import estimates, obb_source
 from ..settings import settings
 from . import fairvalue, multiples_history, quality, tables
@@ -63,15 +69,29 @@ async def valuation_for(symbol: str) -> dict:
                 cash_rows[0].get("free_cash_flow"),
                 cash_rows[0].get("cash_dividends_paid"),
             )
+        # Le taux fourni par la source est parfois faux ; on le recalcule à
+        # partir des détachements observés et du bénéfice publié, et on ne
+        # retombe sur le champ d'origine que faute de mieux.
+        income_rows = statements.get("income") or []
+        eps = None
+        for row in income_rows:
+            eps = row.get("diluted_earnings_per_share") or row.get(
+                "basic_earnings_per_share"
+            )
+            if eps is not None:
+                break
+        computed = payout_ratio(rows, eps)
+        payout = computed if computed is not None else metrics_data.get("payout_ratio")
         verdict, verdict_reason = safety(
-            metrics_data.get("payout_ratio"), coverage, metrics_data.get("dividend_yield")
+            payout, coverage, metrics_data.get("dividend_yield")
         )
         upcoming = next_ex_date([r.get("ex_dividend_date") for r in rows])
         dividend_block = {
             "yield": metrics_data.get("dividend_yield"),
             "growth": round(cagr, 4) if cagr is not None else None,
             "growth_window": window,
-            "payout_ratio": metrics_data.get("payout_ratio"),
+            "payout_ratio": payout,
+            "payout_source": "calculé" if computed is not None else "fourni",
             "fcf_coverage": (
                 None if coverage is None or coverage == float("inf") else round(coverage, 3)
             ),

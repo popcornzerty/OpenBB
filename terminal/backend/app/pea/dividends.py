@@ -23,6 +23,16 @@ PAYOUT_UNCOVERED = 1.00
 COVERAGE_STRETCHED = 0.80
 COVERAGE_UNCOVERED = 1.00
 
+#: Jusqu'où une trésorerie confortable peut racheter un résultat dépassé.
+#:
+#: Un dividende supérieur au bénéfice publié est courant et sain chez les
+#: entreprises à forts amortissements — les télécoms distribuent ainsi plus
+#: que leur résultat comptable tout en générant largement le cash nécessaire.
+#: Mais lorsque le bénéfice ne couvre pas même la moitié du dividende, ce
+#: n'est plus une question de convention comptable : le résultat s'est
+#: effondré, et le flux libre d'un seul exercice ne suffit pas à en rassurer.
+PAYOUT_CASH_TOLERATED = 2.00
+
 
 class Safety(str, Enum):
     """Solidité apparente du dividende."""
@@ -62,6 +72,64 @@ def fcf_coverage(free_cash_flow: float | None, dividends_paid: float | None) -> 
     return paid / free_cash_flow
 
 
+#: Fenêtre retenue pour reconstituer le dividende annuel.
+TRAILING_MONTHS = 12
+
+
+def trailing_dividend(rows: list[dict], today: dt.date | None = None) -> float | None:
+    """Somme des dividendes détachés sur les douze derniers mois.
+
+    ``None`` quand rien n'a été détaché sur la période : un dividende suspendu
+    ne doit pas se lire comme un taux de distribution nul, qui passerait pour
+    une distribution prudente.
+    """
+    today = today or dt.date.today()
+    floor = today - dt.timedelta(days=365)
+    total = 0.0
+    found = False
+    for row in rows:
+        when = row.get("ex_dividend_date")
+        amount = row.get("amount")
+        if when is None or amount is None:
+            continue
+        if isinstance(when, dt.datetime):
+            when = when.date()
+        elif not isinstance(when, dt.date):
+            try:
+                when = dt.date.fromisoformat(str(when)[:10])
+            except ValueError:
+                continue
+        if not (floor <= when <= today):
+            continue
+        try:
+            total += float(amount)
+        except (TypeError, ValueError):
+            continue
+        found = True
+    return total if found and total > 0 else None
+
+
+def payout_ratio(
+    rows: list[dict], earnings_per_share: float | None, today: dt.date | None = None
+) -> float | None:
+    """Taux de distribution reconstitué : dividende annuel / bénéfice par action.
+
+    Le champ fourni par la source est parfois faux — Deutsche Telekom était
+    annoncé à 105 % alors que le dividende de 1,00 € rapporté à un bénéfice de
+    1,97 € en fait 51 %. Le recalculer à partir des détachements réellement
+    observés et du bénéfice publié rend le chiffre vérifiable.
+
+    Un bénéfice négatif ne produit pas de taux : une société en perte qui
+    distribue n'a pas un taux « négatif », elle n'en a pas.
+    """
+    if earnings_per_share is None or earnings_per_share <= 0:
+        return None
+    dividend = trailing_dividend(rows, today)
+    if dividend is None:
+        return None
+    return dividend / earnings_per_share
+
+
 def safety(
     payout_ratio: float | None,
     coverage: float | None,
@@ -69,11 +137,19 @@ def safety(
 ) -> tuple[Safety, str]:
     """Verdict de sûreté, avec sa justification.
 
-    Deux angles, et le plus défavorable l'emporte : le **taux de distribution**
-    dit quelle part du résultat part en dividende, la **couverture par le flux
-    de trésorerie libre** dit si l'argent existe réellement. Une société peut
-    afficher un résultat confortable et ne dégager aucun cash — Engie distribue
-    ainsi sur un flux libre négatif.
+    Deux angles : le **taux de distribution** dit quelle part du résultat part
+    en dividende, la **couverture par le flux de trésorerie libre** dit si
+    l'argent existe réellement.
+
+    Le second prime lorsqu'il est disponible. Un dividende se paie en
+    trésorerie, pas en résultat comptable, et ce résultat est bruité par les
+    dépréciations, éléments non récurrents et intérêts minoritaires : Deutsche
+    Telekom distribuait plus que son bénéfice publié tout en n'absorbant que
+    30 % de son flux libre. Laisser le seul taux de distribution déclencher un
+    « non couvert » revenait à sanctionner une écriture comptable.
+
+    En revanche un flux libre insuffisant reste éliminatoire, quel que soit le
+    résultat affiché — Engie distribue ainsi sur un flux libre négatif.
     """
     # Une société qui ne distribue rien ne mérite pas un feu vert : sans ce
     # test, un taux de distribution nul valait « sûr », et Adyen — qui n'a
@@ -89,12 +165,25 @@ def safety(
     reasons: list[str] = []
     verdict = Safety.SAFE
 
+    # La trésorerie est le juge de paix : quand elle couvre largement le
+    # dividende, un résultat comptable dépassé ne suffit plus à condamner.
+    cash_comfortable = coverage is not None and coverage <= COVERAGE_STRETCHED
+
     if payout_ratio is not None:
         if payout_ratio > PAYOUT_UNCOVERED:
-            verdict = Safety.UNCOVERED
-            reasons.append(
-                f"le dividende dépasse le résultat ({payout_ratio * 100:.0f} % du bénéfice)"
-            )
+            if cash_comfortable and payout_ratio <= PAYOUT_CASH_TOLERATED:
+                verdict = Safety.STRETCHED
+                reasons.append(
+                    f"le dividende dépasse le résultat publié "
+                    f"({payout_ratio * 100:.0f} % du bénéfice) mais reste financé "
+                    "par la trésorerie dégagée"
+                )
+            else:
+                verdict = Safety.UNCOVERED
+                reasons.append(
+                    f"le dividende dépasse le résultat "
+                    f"({payout_ratio * 100:.0f} % du bénéfice)"
+                )
         elif payout_ratio > PAYOUT_STRETCHED:
             verdict = Safety.STRETCHED
             reasons.append(f"{payout_ratio * 100:.0f} % du bénéfice est distribué")

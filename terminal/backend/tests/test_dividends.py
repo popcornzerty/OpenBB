@@ -16,7 +16,9 @@ from app.pea.dividends import (
     fcf_coverage,
     frequency,
     next_ex_date,
+    payout_ratio,
     safety,
+    trailing_dividend,
     yearly_totals,
 )
 
@@ -50,9 +52,19 @@ class TestVerdictDeSurete:
         verdict, _ = safety(payout_ratio=0.75, coverage=0.50, dividend_yield=0.04)
         assert verdict is Safety.STRETCHED
 
-    def test_dividende_superieur_au_resultat(self):
-        """Cas Sanofi : 127 % du bénéfice distribué."""
+    def test_dividende_superieur_au_resultat_mais_couvert_en_cash(self):
+        """Cas Sanofi : 127 % du bénéfice publié, 66 % du flux libre.
+
+        Le résultat IFRS est bruité par les éléments non récurrents ; le
+        dividende, lui, est bien financé. Un « non couvert » écarterait à tort
+        un titre qui augmente sa distribution depuis trente ans.
+        """
         verdict, reason = safety(payout_ratio=1.27, coverage=0.66, dividend_yield=0.055)
+        assert verdict is Safety.STRETCHED
+        assert "dépasse le résultat publié" in reason
+
+    def test_dividende_superieur_au_resultat_et_mal_couvert(self):
+        verdict, reason = safety(payout_ratio=1.27, coverage=1.20, dividend_yield=0.055)
         assert verdict is Safety.UNCOVERED
         assert "dépasse le résultat" in reason
 
@@ -251,3 +263,114 @@ class TestProchaineEcheance:
 
     def test_historique_trop_court_pour_un_rythme(self):
         assert next_ex_date(["2026-05-05"], today=self.TODAY) is None
+
+
+class TestTauxDeDistributionRecalcule:
+    """Le champ fourni par la source est parfois faux.
+
+    Deutsche Telekom était annoncé à 105 % de distribution alors que son
+    dividende de 1,00 € rapporté à un bénéfice publié de 1,97 € en fait 51 %.
+    Une pastille rouge sur une donnée fausse est pire qu'une absence de
+    pastille : elle écarte un titre sain.
+    """
+
+    TODAY = dt.date(2026, 8, 5)
+    DTE = [
+        {"ex_dividend_date": dt.date(2026, 4, 2), "amount": 1.00},
+        {"ex_dividend_date": dt.date(2025, 4, 10), "amount": 0.90},
+        {"ex_dividend_date": dt.date(2024, 4, 11), "amount": 0.77},
+    ]
+
+    def test_cas_deutsche_telekom(self):
+        assert payout_ratio(self.DTE, 1.97, self.TODAY) == pytest.approx(0.5076, abs=1e-3)
+
+    def test_somme_des_detachements_de_l_annee(self):
+        rows = [
+            {"ex_dividend_date": dt.date(2026, 3, 2), "amount": 0.30},
+            {"ex_dividend_date": dt.date(2026, 6, 2), "amount": 0.30},
+            {"ex_dividend_date": dt.date(2025, 12, 2), "amount": 0.30},
+        ]
+        assert trailing_dividend(rows, self.TODAY) == pytest.approx(0.90)
+
+    def test_un_detachement_trop_ancien_est_exclu(self):
+        rows = [{"ex_dividend_date": dt.date(2025, 1, 5), "amount": 2.0}]
+        assert trailing_dividend(rows, self.TODAY) is None
+
+    def test_dividende_suspendu_ne_vaut_pas_taux_nul(self):
+        """Un taux de 0 % se lirait comme une distribution prudente."""
+        assert payout_ratio([], 5.0, self.TODAY) is None
+
+    def test_benefice_negatif_ne_donne_pas_de_taux(self):
+        assert payout_ratio(self.DTE, -1.0, self.TODAY) is None
+
+    def test_benefice_absent(self):
+        assert payout_ratio(self.DTE, None, self.TODAY) is None
+
+    def test_dates_en_chaine(self):
+        rows = [{"ex_dividend_date": "2026-04-02", "amount": 1.00}]
+        assert payout_ratio(rows, 2.0, self.TODAY) == pytest.approx(0.50)
+
+
+class TestPrimauteDuFluxDeTresorerie:
+    """Un dividende se paie en trésorerie, pas en résultat comptable.
+
+    Le résultat publié est bruité par les dépréciations, les éléments non
+    récurrents et les intérêts minoritaires. Le laisser seul déclencher un
+    « non couvert » revenait à sanctionner une écriture comptable.
+    """
+
+    def test_resultat_depasse_mais_tresorerie_confortable(self):
+        verdict, reason = safety(1.05, 0.30, 3.5)
+        assert verdict is Safety.STRETCHED
+        assert "financé par la trésorerie" in reason
+
+    def test_resultat_depasse_et_tresorerie_tendue(self):
+        verdict, _ = safety(1.05, 0.90, 3.5)
+        assert verdict is Safety.UNCOVERED
+
+    def test_resultat_depasse_sans_donnee_de_tresorerie(self):
+        """Sans contre-épreuve, le taux de distribution garde son autorité."""
+        verdict, _ = safety(1.05, None, 3.5)
+        assert verdict is Safety.UNCOVERED
+
+    def test_un_flux_libre_insuffisant_reste_eliminatoire(self):
+        verdict, _ = safety(0.30, 1.40, 3.5)
+        assert verdict is Safety.UNCOVERED
+
+    def test_un_flux_libre_negatif_reste_eliminatoire(self):
+        verdict, _ = safety(0.30, float("inf"), 3.5)
+        assert verdict is Safety.UNCOVERED
+
+    def test_distribution_et_tresorerie_saines(self):
+        verdict, _ = safety(0.45, 0.35, 3.5)
+        assert verdict is Safety.SAFE
+
+
+class TestBorneDeToleranceDuCash:
+    """Une trésorerie confortable ne rachète pas un bénéfice effondré.
+
+    Distribuer plus que son résultat comptable est courant chez les sociétés
+    à forts amortissements. Distribuer huit fois son résultat ne relève plus
+    de la convention comptable — cas Solvay, dont le bénéfice publié était
+    quasi nul.
+    """
+
+    def test_juste_sous_la_borne(self):
+        verdict, _ = safety(1.90, 0.50, 0.04)
+        assert verdict is Safety.STRETCHED
+
+    def test_a_la_borne(self):
+        verdict, _ = safety(2.00, 0.50, 0.04)
+        assert verdict is Safety.STRETCHED
+
+    def test_au_dela_de_la_borne(self):
+        verdict, _ = safety(2.01, 0.50, 0.04)
+        assert verdict is Safety.UNCOVERED
+
+    def test_cas_solvay(self):
+        verdict, _ = safety(81.0, 0.56, 0.06)
+        assert verdict is Safety.UNCOVERED
+
+    def test_cas_deutsche_telekom(self):
+        verdict, _ = safety(1.05, 0.30, 0.036)
+        assert verdict is Safety.STRETCHED
