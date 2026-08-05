@@ -15,7 +15,8 @@ from pydantic import BaseModel, Field
 
 from ..pea import registry
 from ..pea.eligibility import Eligibility, assess
-from ..portfolio import allocation, dividends, store, targets
+from ..portfolio import allocation, dividends, realized, store, targets
+from ..portfolio.realized import Sale
 from ..portfolio.store import Position
 from ..providers import obb_source, wealthfolio_db, yahoo_search
 from ..providers.wealthfolio_db import PortfolioUnavailable
@@ -141,8 +142,131 @@ async def upsert_position(symbol: str, payload: PositionPayload) -> dict:
 
 @router.delete("/positions/{symbol}")
 async def delete_position(symbol: str) -> dict:
-    """Supprime une position."""
+    """Retire une position **sans rien enregistrer**.
+
+    À réserver aux saisies erronées. Une vente passe par ``/sell``, qui
+    conserve la plus-value réalisée et les dividendes encaissés.
+    """
     return store.remove(symbol).as_dict()
+
+
+class SalePayload(BaseModel):
+    """Une cession, totale ou partielle."""
+
+    quantity: float | None = None  # None ⇒ toute la ligne
+    price: float = Field(gt=0)
+    date: str = ""
+    note: str = ""
+
+
+@router.post("/positions/{symbol}/sell")
+async def sell_position(symbol: str, payload: SalePayload) -> dict:
+    """Vend tout ou partie d'une ligne et enregistre la plus-value réalisée.
+
+    Le prix de revient unitaire ne bouge pas lors d'une vente partielle : ce
+    qui reste a été payé au même prix moyen qu'avant.
+    """
+    target = symbol.upper()
+    portfolio = store.load()
+    position = next((p for p in portfolio.positions if p.symbol == target), None)
+    if position is None:
+        raise HTTPException(404, f"{target} n'est pas en portefeuille.")
+
+    quantity = position.quantity if payload.quantity is None else payload.quantity
+    if quantity <= 0:
+        raise HTTPException(422, "La quantité vendue doit être strictement positive.")
+    if quantity > position.quantity + 1e-9:
+        raise HTTPException(
+            422,
+            f"Vous détenez {position.quantity:g} titre(s) de {target}, "
+            f"impossible d'en vendre {quantity:g}.",
+        )
+
+    closed_at = (payload.date or dt.date.today().isoformat())[:10]
+
+    # Les dividendes perçus sur les titres vendus sont figés maintenant : une
+    # fois la ligne partie, plus rien ne permettrait de les recalculer.
+    collected = 0.0
+    try:
+        block = await dividends.for_position(target, quantity, position.opened_at or None)
+        collected = (block.get("accrued") or {}).get("amount") or 0.0
+    except Exception:  # noqa: BLE001
+        collected = 0.0
+
+    sale = Sale(
+        symbol=target,
+        quantity=quantity,
+        average_cost=position.average_cost,
+        sale_price=payload.price,
+        currency=position.currency,
+        opened_at=position.opened_at,
+        closed_at=closed_at,
+        label=position.label,
+        dividends=round(collected, 2),
+        note=payload.note,
+    )
+    realized.add(sale)
+
+    remaining = position.quantity - quantity
+    if remaining <= 1e-9:
+        store.remove(target)
+    else:
+        position.quantity = remaining
+        store.upsert(position)
+
+    return {"sale": sale.as_dict(), "remaining": round(max(remaining, 0.0), 6)}
+
+
+@router.get("/realized")
+async def list_realized() -> dict:
+    """Historique des cessions et cumuls."""
+    sales = realized.load()
+    return {
+        "sales": [s.as_dict() for s in sales],
+        "totals": realized.totals(sales),
+    }
+
+
+@router.delete("/realized/{sale_id}")
+async def cancel_sale(
+    sale_id: str,
+    restore: bool = Query(True, description="Remettre les titres en portefeuille"),
+) -> dict:
+    """Annule une cession saisie par erreur.
+
+    Par défaut les titres reviennent en portefeuille au prix de revient
+    d'origine — c'est le sens d'une annulation.
+    """
+    sale = realized.get(sale_id)
+    if sale is None:
+        raise HTTPException(404, "Cession introuvable.")
+
+    realized.remove(sale_id)
+    if restore:
+        portfolio = store.load()
+        existing = next((p for p in portfolio.positions if p.symbol == sale.symbol), None)
+        if existing is None:
+            store.upsert(
+                Position(
+                    symbol=sale.symbol,
+                    quantity=sale.quantity,
+                    average_cost=sale.average_cost,
+                    currency=sale.currency,
+                    opened_at=sale.opened_at,
+                    label=sale.label,
+                )
+            )
+        else:
+            # La ligne existe encore : on remet les titres en conservant un
+            # prix de revient moyen cohérent entre les deux lots.
+            total_quantity = existing.quantity + sale.quantity
+            existing.average_cost = (
+                existing.cost_basis + sale.cost_basis
+            ) / total_quantity
+            existing.quantity = total_quantity
+            store.upsert(existing)
+
+    return {"cancelled": sale.as_dict(), "restored": restore}
 
 
 class CsvPayload(BaseModel):
@@ -242,6 +366,12 @@ async def holdings(
         (r.get("dividend") or {}).get("accrued", {}).get("amount") or 0 for r in rows
     )
 
+    sales = realized.load()
+    closed = realized.totals(sales)
+    # Les dividendes des lignes vendues restent acquis : les oublier ferait
+    # reculer le cumul à chaque arbitrage.
+    collected += closed["dividends"]
+
     upcoming = [
         {
             "symbol": r["symbol"],
@@ -272,6 +402,12 @@ async def holdings(
             "dividends_collected": round(collected, 2),
             "dividend_yield_on_cost": (
                 round(collected / total_cost, 4) if total_cost else None
+            ),
+            "realized": closed,
+            # Ce que le portefeuille a rapporté au total : la plus-value
+            # latente seule ignore les arbitrages déjà encaissés.
+            "overall_gain": round(
+                (total_value - total_cost) + closed["gain"] + collected, 2
             ),
             "upcoming": upcoming[:8],
         },

@@ -7,9 +7,10 @@ import {
 } from "../lib/api";
 import { PeaBadge } from "../components/PeaBadge";
 import { PortfolioAllocation } from "./PortfolioAllocation";
+import { PortfolioSales } from "./PortfolioSales";
 import { changeClass, compact, date, money, num, pct } from "../lib/format";
 
-type Tab = "positions" | "repartition";
+type Tab = "positions" | "repartition" | "cessions";
 
 const EMPTY: PositionInput = {
   symbol: "",
@@ -34,6 +35,8 @@ export function Portfolio({ onOpen }: { onOpen: (symbol: string) => void }) {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [editing, setEditing] = useState<PositionInput | null>(null);
+  // Ligne en cours de cession, avec son cours pour préremplir le prix.
+  const [selling, setSelling] = useState<PortfolioRow | null>(null);
   const [wealthfolioCount, setWealthfolioCount] = useState(0);
   // Fichier lu, en attente du choix « compléter » ou « remplacer ».
   const [pending, setPending] = useState<{ name: string; content: string } | null>(null);
@@ -73,7 +76,29 @@ export function Portfolio({ onOpen }: { onOpen: (symbol: string) => void }) {
   const removePosition = async (symbol: string) => {
     try {
       await api.deletePosition(symbol);
-      setNotice(`${symbol} supprimée.`);
+      setNotice(
+        `${symbol} retirée sans enregistrer de cession. ` +
+          "Si vous l'avez vendue, utilisez « Vendre » pour conserver la plus-value.",
+      );
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erreur");
+    }
+  };
+
+  const sell = async (
+    symbol: string,
+    sale: { quantity: number | null; price: number; date: string; note: string },
+  ) => {
+    try {
+      const result = await api.sellPosition(symbol, sale);
+      setSelling(null);
+      const gain = result.sale.gain;
+      setNotice(
+        `${symbol} : ${result.sale.quantity} titre(s) vendu(s), ` +
+          `${gain >= 0 ? "plus-value" : "moins-value"} de ${money(gain, "EUR")}.` +
+          (result.remaining > 0 ? ` Il reste ${result.remaining} titre(s).` : ""),
+      );
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erreur");
@@ -117,6 +142,12 @@ export function Portfolio({ onOpen }: { onOpen: (symbol: string) => void }) {
       >
         Répartition
       </button>
+      <button
+        className={tab === "cessions" ? "active" : ""}
+        onClick={() => setTab("cessions")}
+      >
+        Cessions{summary?.realized.count ? ` (${summary.realized.count})` : ""}
+      </button>
     </div>
   );
 
@@ -138,6 +169,8 @@ export function Portfolio({ onOpen }: { onOpen: (symbol: string) => void }) {
 
       {tab === "repartition" ? (
         <PortfolioAllocation />
+      ) : tab === "cessions" ? (
+        <PortfolioSales onChanged={load} onOpen={onOpen} />
       ) : (
         <>
           {summary && <Summary summary={summary} />}
@@ -296,6 +329,14 @@ export function Portfolio({ onOpen }: { onOpen: (symbol: string) => void }) {
                             >
                               Modifier
                             </button>
+                            <button
+                              className="chip"
+                              style={{ marginLeft: 4 }}
+                              onClick={() => setSelling(row)}
+                              title="Enregistre une cession : la plus-value et les dividendes déjà perçus sont conservés."
+                            >
+                              Vendre
+                            </button>
                           </td>
                         </tr>
                       );
@@ -356,6 +397,23 @@ export function Portfolio({ onOpen }: { onOpen: (symbol: string) => void }) {
           onCancel={() => setEditing(null)}
           onSave={savePosition}
           onDelete={rows.some((r) => r.symbol === editing.symbol) ? removePosition : undefined}
+          onSell={
+            rows.some((r) => r.symbol === editing.symbol)
+              ? () => {
+                  const row = rows.find((r) => r.symbol === editing.symbol) ?? null;
+                  setEditing(null);
+                  setSelling(row);
+                }
+              : undefined
+          }
+        />
+      )}
+
+      {selling && (
+        <SaleForm
+          row={selling}
+          onCancel={() => setSelling(null)}
+          onConfirm={(sale) => sell(selling.symbol, sale)}
         />
       )}
     </div>
@@ -377,7 +435,21 @@ function Summary({ summary }: { summary: PortfolioSummary }) {
         value={pct(summary.total_gain_percent)}
         tone={(summary.total_gain_percent ?? 0) >= 0 ? "up" : "down"}
       />
+      {summary.realized.count > 0 && (
+        <Kpi
+          label="Plus-value réalisée"
+          value={money(summary.realized.gain, "EUR")}
+          tone={changeClass(summary.realized.gain) as "up" | "down" | undefined}
+        />
+      )}
       <Kpi label="Dividendes perçus" value={money(summary.dividends_collected, "EUR")} />
+      {summary.realized.count > 0 && (
+        <Kpi
+          label="Gain total"
+          value={money(summary.overall_gain, "EUR")}
+          tone={changeClass(summary.overall_gain) as "up" | "down" | undefined}
+        />
+      )}
       <Kpi
         label="Rendement sur PRU"
         value={pct(summary.dividend_yield_on_cost, 2).replace("+", "")}
@@ -406,11 +478,13 @@ function PositionForm({
   onCancel,
   onSave,
   onDelete,
+  onSell,
 }: {
   position: PositionInput;
   onCancel: () => void;
   onSave: (position: PositionInput) => void;
   onDelete?: (symbol: string) => void;
+  onSell?: () => void;
 }) {
   const [form, setForm] = useState(position);
   const isNew = !position.symbol;
@@ -462,12 +536,18 @@ function PositionForm({
           </Field>
 
           <div className="row" style={{ justifyContent: "space-between", marginTop: 4 }}>
-            <div>
+            <div className="row" style={{ gap: 6 }}>
+              {onSell && (
+                <button className="chip" onClick={onSell}>
+                  Vendre…
+                </button>
+              )}
               {onDelete && (
                 <button
                   className="chip"
                   style={{ color: "var(--down)" }}
                   onClick={() => onDelete(position.symbol)}
+                  title="Retire la ligne sans enregistrer de plus-value. Pour une vente, utilisez « Vendre »."
                 >
                   Supprimer
                 </button>
@@ -483,6 +563,128 @@ function PositionForm({
                 Enregistrer
               </button>
             </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Enregistrement d'une cession, totale ou partielle.
+ *
+ *  Distincte de la suppression : elle conserve la plus-value réalisée et les
+ *  dividendes déjà encaissés, que la disparition de la ligne effacerait. */
+function SaleForm({
+  row,
+  onCancel,
+  onConfirm,
+}: {
+  row: PortfolioRow;
+  onCancel: () => void;
+  onConfirm: (sale: {
+    quantity: number | null;
+    price: number;
+    date: string;
+    note: string;
+  }) => void;
+}) {
+  const [quantity, setQuantity] = useState(String(row.quantity));
+  // Le dernier cours connu est le point de départ le plus probable, mais il
+  // reste modifiable : une vente s'est faite à un prix, pas à une estimation.
+  const [price, setPrice] = useState(row.price !== null ? String(row.price) : "");
+  const [when, setWhen] = useState(new Date().toISOString().slice(0, 10));
+  const [note, setNote] = useState("");
+
+  const parsed = (value: string) => Number(value.replace(",", ".")) || 0;
+  const soldQuantity = parsed(quantity);
+  const soldPrice = parsed(price);
+  const partial = soldQuantity > 0 && soldQuantity < row.quantity;
+  const tooMany = soldQuantity > row.quantity;
+  const gain = soldQuantity * (soldPrice - row.average_cost);
+  const valid = soldQuantity > 0 && !tooMany && soldPrice > 0;
+
+  return (
+    <div className="overlay" onMouseDown={onCancel}>
+      <div className="command" onMouseDown={(event) => event.stopPropagation()}>
+        <div className="panel-head">
+          <span className="panel-title">Vendre {row.symbol}</span>
+        </div>
+        <div className="panel-body stack" style={{ gap: 10 }}>
+          <Field
+            label="Quantité vendue"
+            hint={`${compact(row.quantity)} titre(s) en portefeuille. Une quantité inférieure enregistre une cession partielle.`}
+          >
+            <input
+              value={quantity}
+              onChange={(event) => setQuantity(event.target.value)}
+              inputMode="decimal"
+              autoFocus
+            />
+          </Field>
+          <Field label="Prix de vente unitaire" hint="Prérempli au dernier cours connu.">
+            <input
+              value={price}
+              onChange={(event) => setPrice(event.target.value)}
+              inputMode="decimal"
+            />
+          </Field>
+          <Field label="Date de vente">
+            <input type="date" value={when} onChange={(e) => setWhen(e.target.value)} />
+          </Field>
+          <Field label="Note" hint="Facultatif — le motif de l'arbitrage, par exemple.">
+            <input value={note} onChange={(event) => setNote(event.target.value)} />
+          </Field>
+
+          {tooMany && (
+            <div className="callout error">
+              Vous ne détenez que {compact(row.quantity)} titre(s) de {row.symbol}.
+            </div>
+          )}
+
+          {valid && (
+            <div className="callout">
+              <div className="row" style={{ justifyContent: "space-between" }}>
+                <span>Produit de la vente</span>
+                <strong className="num">{money(soldQuantity * soldPrice, "EUR")}</strong>
+              </div>
+              <div className="row" style={{ justifyContent: "space-between" }}>
+                <span>Prix de revient ({num(row.average_cost)} × {compact(soldQuantity)})</span>
+                <span className="num">{money(soldQuantity * row.average_cost, "EUR")}</span>
+              </div>
+              <div className="row" style={{ justifyContent: "space-between" }}>
+                <span>{gain >= 0 ? "Plus-value réalisée" : "Moins-value réalisée"}</span>
+                <strong className={`num ${changeClass(gain)}`}>{money(gain, "EUR")}</strong>
+              </div>
+              {partial && (
+                <div className="note" style={{ marginTop: 6 }}>
+                  Cession partielle : il restera {compact(row.quantity - soldQuantity)}{" "}
+                  titre(s) au même prix de revient unitaire.
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="note">
+            Dans un PEA, une plus-value réalisée n'est pas imposée tant qu'aucun retrait
+            n'est effectué : elle est enregistrée ici à titre de suivi, pas de fiscalité.
+          </div>
+
+          <div className="row" style={{ justifyContent: "flex-end", marginTop: 4 }}>
+            <button className="chip" onClick={onCancel}>Annuler</button>
+            <button
+              className="chip active"
+              disabled={!valid}
+              onClick={() =>
+                onConfirm({
+                  quantity: soldQuantity >= row.quantity ? null : soldQuantity,
+                  price: soldPrice,
+                  date: when,
+                  note,
+                })
+              }
+            >
+              Enregistrer la cession
+            </button>
           </div>
         </div>
       </div>

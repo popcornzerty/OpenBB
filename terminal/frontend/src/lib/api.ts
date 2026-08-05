@@ -326,7 +326,42 @@ export interface PortfolioSummary {
   /** Cumul des dividendes détachés depuis l'entrée en position. */
   dividends_collected: number;
   dividend_yield_on_cost: number | null;
+  realized: RealizedTotals;
+  /** Latent + réalisé + dividendes : ce que le portefeuille a rapporté. */
+  overall_gain: number;
   upcoming: { symbol: string; date: string; amount: number | null }[];
+}
+
+/** Une cession, totale ou partielle. */
+export interface Sale {
+  id: string;
+  symbol: string;
+  label: string;
+  quantity: number;
+  average_cost: number;
+  sale_price: number;
+  currency: string;
+  opened_at: string;
+  closed_at: string;
+  cost_basis: number;
+  proceeds: number;
+  gain: number;
+  gain_percent: number | null;
+  holding_days: number | null;
+  dividends: number;
+  total_return: number;
+  note: string;
+}
+
+export interface RealizedTotals {
+  count: number;
+  cost_basis: number;
+  proceeds: number;
+  gain: number;
+  gain_percent: number | null;
+  dividends: number;
+  total_return: number;
+  win_rate: number | null;
 }
 
 export interface AllocationSlice {
@@ -380,8 +415,28 @@ export const api = {
   savePosition: (symbol: string, position: PositionInput) =>
     send<{ count: number }>("PUT", `/portfolio/positions/${encodeURIComponent(symbol)}`, position),
 
+  /** Retire une ligne sans rien enregistrer — pour une saisie erronée. */
   deletePosition: (symbol: string) =>
     send<{ count: number }>("DELETE", `/portfolio/positions/${encodeURIComponent(symbol)}`),
+
+  /** Vend tout ou partie d'une ligne et enregistre la plus-value réalisée. */
+  sellPosition: (
+    symbol: string,
+    sale: { quantity: number | null; price: number; date: string; note: string },
+  ) =>
+    send<{ sale: Sale; remaining: number }>(
+      "POST",
+      `/portfolio/positions/${encodeURIComponent(symbol)}/sell`,
+      sale,
+    ),
+
+  realized: () => get<{ sales: Sale[]; totals: RealizedTotals }>("/portfolio/realized"),
+
+  cancelSale: (id: string) =>
+    send<{ cancelled: Sale; restored: boolean }>(
+      "DELETE",
+      `/portfolio/realized/${encodeURIComponent(id)}`,
+    ),
 
   importCsv: (content: string, replace = true) =>
     send<{ count: number; imported: number; warnings: string[] }>(
