@@ -324,3 +324,108 @@ class TestEvolutionDuMultiple:
             multiples_history.compute(
                 daily_history("2022-01-01", 600, 20.0), points_from(2022, 3, 2.0), "inconnue"
             )
+
+
+class TestInteretsMinoritaires:
+    """La valeur d'entreprise mesure l'ensemble consolidé.
+
+    Le compte de résultat et le tableau de flux rendent compte de la totalité
+    du groupe ; la capitalisation, elle, ne couvre que la maison mère. Omettre
+    les minoritaires sous-estimait la valeur d'entreprise de Deutsche Telekom
+    de 30 Md€, et donc tous ses multiples de VE.
+    """
+
+    STATEMENTS = {
+        **STATEMENTS,
+        "balance": [
+            balance(2025, minority_interest=300.0),
+            balance(2024, minority_interest=280.0),
+            balance(2023, minority_interest=260.0),
+        ],
+    }
+
+    def test_la_valeur_d_entreprise_les_inclut(self):
+        result = tables.build(self.STATEMENTS, CLOSES, CONSENSUS, last_price=30.0)
+        ev = row_of(result["valuation_rows"], "enterprise_value")["values"]
+        # 50 € × 50 titres + 400 de dette nette + 300 de minoritaires
+        assert ev[2] == pytest.approx(2500.0 + 400.0 + 300.0)
+
+    def test_sans_minoritaires_la_valeur_est_inchangee(self):
+        result = tables.build(STATEMENTS, CLOSES, CONSENSUS, last_price=30.0)
+        ev = row_of(result["valuation_rows"], "enterprise_value")["values"]
+        assert ev[2] == pytest.approx(2500.0 + 400.0)
+
+    def test_les_colonnes_estimees_prolongent_les_minoritaires(self):
+        result = tables.build(self.STATEMENTS, CLOSES, CONSENSUS, last_price=30.0)
+        ev = row_of(result["valuation_rows"], "enterprise_value")["values"]
+        assert ev[3] == pytest.approx(30.0 * 50.0 + 400.0 + 300.0)
+
+    def test_le_biais_de_perimetre_est_signale(self):
+        result = tables.build(self.STATEMENTS, CLOSES, CONSENSUS, last_price=30.0)
+        assert any("intérêts minoritaires significatifs" in n for n in result["notes"])
+
+    def test_aucun_signalement_sans_minoritaires(self):
+        result = tables.build(STATEMENTS, CLOSES, CONSENSUS, last_price=30.0)
+        assert not any("minoritaires significatifs" in n for n in result["notes"])
+
+
+class TestDeuxRendementsDuFlux:
+    def test_rapporte_a_la_capitalisation(self):
+        result = tables.build(STATEMENTS, CLOSES, CONSENSUS, last_price=30.0)
+        values = row_of(result["valuation_rows"], "fcf_yield")["values"]
+        assert values[2] == pytest.approx(150.0 / 2500.0)
+
+    def test_rapporte_a_la_valeur_d_entreprise(self):
+        result = tables.build(STATEMENTS, CLOSES, CONSENSUS, last_price=30.0)
+        values = row_of(result["valuation_rows"], "fcf_yield_ev")["values"]
+        assert values[2] == pytest.approx(150.0 / 2900.0, abs=1e-6)
+
+    def test_le_rendement_sur_ve_est_toujours_le_plus_bas_si_endette(self):
+        """Une dette nette positive ne peut qu'abaisser le rendement."""
+        result = tables.build(STATEMENTS, CLOSES, CONSENSUS, last_price=30.0)
+        cap = row_of(result["valuation_rows"], "fcf_yield")["values"]
+        ev = row_of(result["valuation_rows"], "fcf_yield_ev")["values"]
+        for a, b in zip(cap, ev):
+            if a is not None and b is not None:
+                assert b <= a
+
+
+class TestMaterialiteDesMinoritaires:
+    """Presque toute société consolidante porte des minoritaires.
+
+    LVMH en a pour 0,4 % de sa capitalisation, ce qui ne change rien à la
+    lecture de ses ratios ; Deutsche Telekom en porte 22 %. Signaler les deux
+    reviendrait à ne rien signaler.
+    """
+
+    def _with(self, amount: float) -> dict:
+        return {
+            **STATEMENTS,
+            "balance": [
+                balance(2025, minority_interest=amount),
+                balance(2024, minority_interest=amount),
+                balance(2023, minority_interest=amount),
+            ],
+        }
+
+    def test_minoritaires_negligeables_non_signales(self):
+        # 10 pour une capitalisation de 2 500, soit 0,4 %.
+        result = tables.build(self._with(10.0), CLOSES, CONSENSUS, last_price=30.0)
+        assert not any("minoritaires significatifs" in n for n in result["notes"])
+
+    def test_minoritaires_significatifs_signales(self):
+        # 500 pour 2 500, soit 20 %.
+        result = tables.build(self._with(500.0), CLOSES, CONSENSUS, last_price=30.0)
+        assert any("minoritaires significatifs" in n for n in result["notes"])
+
+    def test_ils_entrent_dans_la_valeur_d_entreprise_meme_negligeables(self):
+        """Le seuil ne porte que sur l'avertissement, pas sur le calcul."""
+        result = tables.build(self._with(10.0), CLOSES, CONSENSUS, last_price=30.0)
+        ev = row_of(result["valuation_rows"], "enterprise_value")["values"]
+        assert ev[2] == pytest.approx(2500.0 + 400.0 + 10.0)
+
+    def test_le_poids_se_juge_sur_un_exercice_publie(self):
+        """Une colonne estimée porte le cours du jour, pas une capitalisation
+        constatée : fonder le seuil dessus le rendrait dépendant du marché."""
+        result = tables.build(self._with(500.0), CLOSES, CONSENSUS, last_price=1.0)
+        assert any("minoritaires significatifs" in n for n in result["notes"])

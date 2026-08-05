@@ -31,6 +31,16 @@ import pandas as pd
 #: laisser un nombre absurde structurer la lecture du tableau.
 MAX_MULTIPLE = 300.0
 
+#: Poids des intérêts minoritaires, rapporté à la capitalisation, à partir
+#: duquel l'écart de périmètre mérite d'être signalé.
+#:
+#: Presque toute société consolidante en porte quelques-uns : LVMH en a pour
+#: 0,4 % de sa capitalisation, ce qui ne change rien à la lecture de ses
+#: ratios. Deutsche Telekom en porte 22 %, et là le rendement du flux rapporté
+#: à la seule capitalisation devient trompeur. Avertir dans les deux cas
+#: reviendrait à n'avertir dans aucun.
+MINORITY_MATERIAL = 0.05
+
 
 def _number(value: Any) -> float | None:
     if value is None:
@@ -274,7 +284,7 @@ def build(
 
     # ---- compte de résultat ------------------------------------------------
     revenue, ebitda, ebit, net_income, eps, shares = [], [], [], [], [], []
-    dividend_ps, fcf, net_debt, equity = [], [], [], []
+    dividend_ps, fcf, net_debt, equity, minority = [], [], [], [], []
 
     for year in years:
         estimated = estimate_data.get(year)
@@ -291,6 +301,7 @@ def build(
             fcf.append(None)
             net_debt.append(None)
             equity.append(None)
+            minority.append(None)
             # Le résultat net estimé se déduit du BNPA et du nombre de titres
             # le plus récent : c'est une reconstitution, signalée comme telle.
             latest_shares = next(
@@ -311,7 +322,7 @@ def build(
         if row is None:
             for bucket in (
                 revenue, ebitda, ebit, net_income, eps, shares,
-                dividend_ps, fcf, net_debt, equity,
+                dividend_ps, fcf, net_debt, equity, minority,
             ):
                 bucket.append(None)
             continue
@@ -350,6 +361,9 @@ def build(
             debt = total_debt - treasury if total_debt is not None and treasury is not None else None
         net_debt.append(debt)
         equity.append(_first(balance_row, "common_stock_equity", "total_common_equity"))
+        minority.append(
+            _first(balance_row, "minority_interest", "total_equity_non_controlling_interests")
+        )
 
     def growth(values: list[float | None]) -> list[float | None]:
         result: list[float | None] = [None]
@@ -388,6 +402,7 @@ def build(
     # ---- valorisation ------------------------------------------------------
     market_cap, enterprise_value = [], []
     last_known_debt = next((d for d in reversed(net_debt) if d is not None), None)
+    last_known_minority = next((m for m in reversed(minority) if m is not None), None)
     used_stale_debt = False
 
     for index, column in enumerate(columns):
@@ -401,16 +416,40 @@ def build(
         market_cap.append(cap)
 
         debt = net_debt[index]
-        if debt is None and column.estimate and last_known_debt is not None:
-            debt = last_known_debt
-            used_stale_debt = True
-        enterprise_value.append(cap + debt if cap is not None and debt is not None else None)
+        outside = minority[index]
+        if column.estimate:
+            if debt is None and last_known_debt is not None:
+                debt = last_known_debt
+                used_stale_debt = True
+            if outside is None:
+                outside = last_known_minority
+        # La valeur d'entreprise inclut les intérêts minoritaires : elle mesure
+        # ce que vaut l'ensemble consolidé, dont les comptes de résultat et de
+        # flux rendent compte en totalité. Les omettre sous-estimait la VE de
+        # Deutsche Telekom de 30 Md€ — et donc tous ses multiples de VE.
+        enterprise_value.append(
+            cap + debt + (outside or 0.0)
+            if cap is not None and debt is not None
+            else None
+        )
 
     if used_stale_debt:
         notes.append(
             "La valeur d'entreprise estimée retient la dernière dette nette publiée : "
             "aucune source gratuite n'estime l'endettement à venir."
         )
+
+    # Le poids des minoritaires se juge sur le dernier exercice publié, seul
+    # rattaché à une capitalisation constatée.
+    has_minority = False
+    for index in range(len(columns) - 1, -1, -1):
+        if columns[index].estimate:
+            continue
+        outside, cap = minority[index], market_cap[index]
+        if outside is None or not cap:
+            continue
+        has_minority = outside / cap > MINORITY_MATERIAL
+        break
 
     per = [
         _ratio(column.price, eps[index])
@@ -441,8 +480,31 @@ def build(
              [
                  (f / c) if f is not None and c else None
                  for f, c in zip(fcf, market_cap)
-             ]),
+             ],
+             "Flux disponible du groupe rapporté à la capitalisation. C'est la "
+             "convention usuelle, mais les deux termes ne couvrent pas le même "
+             "périmètre dès qu'il existe des minoritaires : le flux est celui "
+             "de l'ensemble consolidé, la capitalisation celle des seuls "
+             "actionnaires de la maison mère."),
+        _row("fcf_yield_ev", "Rendement du flux sur valeur d'entreprise", "percent",
+             [
+                 (f / e) if f is not None and e else None
+                 for f, e in zip(fcf, enterprise_value)
+             ],
+             "Même flux, rapporté cette fois à la valeur d'entreprise : "
+             "numérateur et dénominateur portent alors sur le même périmètre, "
+             "dette et minoritaires compris. Moins comparable aux fiches "
+             "usuelles, plus robuste sur les groupes endettés ou à minoritaires."),
     ]
+
+    if has_minority:
+        notes.append(
+            "Cette société porte des intérêts minoritaires significatifs. Le flux "
+            "disponible et l'EBITDA publiés sont ceux du groupe entier, alors que "
+            "la capitalisation ne représente que la maison mère : le rendement du "
+            "flux rapporté à la capitalisation en est flatté. La ligne rapportée à "
+            "la valeur d'entreprise ne souffre pas de ce biais."
+        )
 
     if any(column.thin for column in columns):
         notes.append(
