@@ -410,6 +410,9 @@ export interface Sale {
   closed_at: string;
   cost_basis: number;
   proceeds: number;
+  /** Produit net de frais : ce qui rentre réellement sur le compte. */
+  net_proceeds: number;
+  fees: number;
   gain: number;
   gain_percent: number | null;
   holding_days: number | null;
@@ -422,6 +425,9 @@ export interface RealizedTotals {
   count: number;
   cost_basis: number;
   proceeds: number;
+  /** Produit net de frais : ce qui rentre réellement sur le compte. */
+  net_proceeds: number;
+  fees: number;
   gain: number;
   gain_percent: number | null;
   dividends: number;
@@ -487,7 +493,13 @@ export const api = {
   /** Vend tout ou partie d'une ligne et enregistre la plus-value réalisée. */
   sellPosition: (
     symbol: string,
-    sale: { quantity: number | null; price: number; date: string; note: string },
+    sale: {
+      quantity: number | null;
+      price: number;
+      date: string;
+      fees: number;
+      note: string;
+    },
   ) =>
     send<{ sale: Sale; remaining: number }>(
       "POST",

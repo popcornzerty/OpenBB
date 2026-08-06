@@ -40,6 +40,11 @@ class Sale:
     #: figés au moment de la vente : la position disparue, ils ne seraient
     #: plus recalculables.
     dividends: float = 0.0
+    #: Frais de courtage et taxes acquittés sur l'opération. Ils viennent en
+    #: déduction de la plus-value : ce qui rentre sur le compte, c'est le
+    #: produit net, pas le produit brut.
+    fees: float = 0.0
+    #: Motif de l'arbitrage, conservé pour être relu plus tard.
     note: str = ""
 
     @property
@@ -48,11 +53,17 @@ class Sale:
 
     @property
     def proceeds(self) -> float:
+        """Produit brut, avant frais."""
         return self.quantity * self.sale_price
 
     @property
+    def net_proceeds(self) -> float:
+        """Ce qui rentre effectivement sur le compte."""
+        return self.proceeds - self.fees
+
+    @property
     def gain(self) -> float:
-        return self.proceeds - self.cost_basis
+        return self.net_proceeds - self.cost_basis
 
     @property
     def gain_percent(self) -> float | None:
@@ -73,6 +84,7 @@ class Sale:
             **asdict(self),
             "cost_basis": round(self.cost_basis, 2),
             "proceeds": round(self.proceeds, 2),
+            "net_proceeds": round(self.net_proceeds, 2),
             "gain": round(self.gain, 2),
             "gain_percent": (
                 round(self.gain_percent, 4) if self.gain_percent is not None else None
@@ -113,6 +125,7 @@ def load() -> list[Sale]:
                     closed_at=item.get("closed_at") or "",
                     label=item.get("label") or "",
                     dividends=float(item.get("dividends") or 0),
+                    fees=float(item.get("fees") or 0),
                     note=item.get("note") or "",
                 )
             )
@@ -165,11 +178,14 @@ def totals(sales: list[Sale]) -> dict:
     cost = sum(s.cost_basis for s in sales)
     gain = sum(s.gain for s in sales)
     dividends = sum(s.dividends for s in sales)
+    fees = sum(s.fees for s in sales)
     winners = [s for s in sales if s.gain > 0]
     return {
         "count": len(sales),
         "cost_basis": round(cost, 2),
         "proceeds": round(sum(s.proceeds for s in sales), 2),
+        "net_proceeds": round(sum(s.net_proceeds for s in sales), 2),
+        "fees": round(fees, 2),
         "gain": round(gain, 2),
         "gain_percent": round(gain / cost, 4) if cost else None,
         "dividends": round(dividends, 2),

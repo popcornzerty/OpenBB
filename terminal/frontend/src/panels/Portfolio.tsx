@@ -88,7 +88,13 @@ export function Portfolio({ onOpen }: { onOpen: (symbol: string) => void }) {
 
   const sell = async (
     symbol: string,
-    sale: { quantity: number | null; price: number; date: string; note: string },
+    sale: {
+      quantity: number | null;
+      price: number;
+      date: string;
+      fees: number;
+      note: string;
+    },
   ) => {
     try {
       const result = await api.sellPosition(symbol, sale);
@@ -520,14 +526,23 @@ function PositionForm({
   const [form, setForm] = useState(position);
   const isNew = !position.symbol;
 
+  // Les montants sont tenus en texte tant que la saisie dure. Les convertir à
+  // chaque frappe rendait toute décimale impossible : « 10, » repassait par
+  // Number(), redevenait 10, et le séparateur disparaissait sous les doigts.
+  const [quantity, setQuantity] = useState(
+    position.quantity ? String(position.quantity) : "",
+  );
+  const [cost, setCost] = useState(
+    position.average_cost ? String(position.average_cost) : "",
+  );
+
+  const toNumber = (text: string) =>
+    Number(text.replace(",", ".").replace(/[\s  ]/g, "")) || 0;
+  const quantityValue = toNumber(quantity);
+  const costValue = toNumber(cost);
+
   const set = (key: keyof PositionInput, value: string) =>
-    setForm((current) => ({
-      ...current,
-      [key]:
-        key === "quantity" || key === "average_cost"
-          ? Number(value.replace(",", ".")) || 0
-          : value,
-    }));
+    setForm((current) => ({ ...current, [key]: value }));
 
   return (
     <div className="overlay" onMouseDown={onCancel}>
@@ -546,11 +561,19 @@ function PositionForm({
               autoFocus={isNew}
             />
           </Field>
-          <Field label="Quantité">
-            <input value={String(form.quantity)} onChange={(e) => set("quantity", e.target.value)} inputMode="decimal" />
+          <Field label="Quantité" hint="Décimales acceptées, à la virgule comme au point.">
+            <input
+              value={quantity}
+              onChange={(event) => setQuantity(event.target.value)}
+              inputMode="decimal"
+            />
           </Field>
           <Field label="Prix de revient unitaire">
-            <input value={String(form.average_cost)} onChange={(e) => set("average_cost", e.target.value)} inputMode="decimal" />
+            <input
+              value={cost}
+              onChange={(event) => setCost(event.target.value)}
+              inputMode="decimal"
+            />
           </Field>
           <Field
             label="Date d'entrée"
@@ -588,8 +611,10 @@ function PositionForm({
               <button className="chip" onClick={onCancel}>Annuler</button>
               <button
                 className="chip active"
-                onClick={() => onSave(form)}
-                disabled={!form.symbol || form.quantity <= 0}
+                onClick={() =>
+                  onSave({ ...form, quantity: quantityValue, average_cost: costValue })
+                }
+                disabled={!form.symbol || quantityValue <= 0}
               >
                 Enregistrer
               </button>
@@ -616,6 +641,7 @@ function SaleForm({
     quantity: number | null;
     price: number;
     date: string;
+    fees: number;
     note: string;
   }) => void;
 }) {
@@ -624,14 +650,21 @@ function SaleForm({
   // reste modifiable : une vente s'est faite à un prix, pas à une estimation.
   const [price, setPrice] = useState(row.price !== null ? String(row.price) : "");
   const [when, setWhen] = useState(new Date().toISOString().slice(0, 10));
+  const [fees, setFees] = useState("");
   const [note, setNote] = useState("");
 
-  const parsed = (value: string) => Number(value.replace(",", ".")) || 0;
+  const parsed = (value: string) =>
+    Number(value.replace(",", ".").replace(/[\s  ]/g, "")) || 0;
   const soldQuantity = parsed(quantity);
   const soldPrice = parsed(price);
+  const soldFees = parsed(fees);
   const partial = soldQuantity > 0 && soldQuantity < row.quantity;
   const tooMany = soldQuantity > row.quantity;
-  const gain = soldQuantity * (soldPrice - row.average_cost);
+  const proceeds = soldQuantity * soldPrice;
+  const netProceeds = proceeds - soldFees;
+  // La plus-value se mesure sur ce qui rentre réellement : le courtage et les
+  // taxes sont payés, ils ne sont pas un gain.
+  const gain = netProceeds - soldQuantity * row.average_cost;
   const valid = soldQuantity > 0 && !tooMany && soldPrice > 0;
 
   return (
@@ -662,8 +695,26 @@ function SaleForm({
           <Field label="Date de vente">
             <input type="date" value={when} onChange={(e) => setWhen(e.target.value)} />
           </Field>
-          <Field label="Note" hint="Facultatif — le motif de l'arbitrage, par exemple.">
-            <input value={note} onChange={(event) => setNote(event.target.value)} />
+          <Field
+            label="Frais et taxes"
+            hint="Courtage et taxes de l'opération, en euros. Déduits de la plus-value."
+          >
+            <input
+              value={fees}
+              onChange={(event) => setFees(event.target.value)}
+              inputMode="decimal"
+              placeholder="0"
+            />
+          </Field>
+          <Field
+            label="Motif"
+            hint="Conservé et affiché dans l'historique des cessions."
+          >
+            <input
+              value={note}
+              onChange={(event) => setNote(event.target.value)}
+              placeholder="Arbitrage vers la santé, prise de bénéfice…"
+            />
           </Field>
 
           {tooMany && (
@@ -675,9 +726,21 @@ function SaleForm({
           {valid && (
             <div className="callout">
               <div className="row" style={{ justifyContent: "space-between" }}>
-                <span>Produit de la vente</span>
-                <strong className="num">{money(soldQuantity * soldPrice, "EUR")}</strong>
+                <span>Produit brut</span>
+                <span className="num">{money(proceeds, "EUR")}</span>
               </div>
+              {soldFees > 0 && (
+                <>
+                  <div className="row" style={{ justifyContent: "space-between" }}>
+                    <span>Frais et taxes</span>
+                    <span className="num down">−{money(soldFees, "EUR")}</span>
+                  </div>
+                  <div className="row" style={{ justifyContent: "space-between" }}>
+                    <span>Produit net encaissé</span>
+                    <strong className="num">{money(netProceeds, "EUR")}</strong>
+                  </div>
+                </>
+              )}
               <div className="row" style={{ justifyContent: "space-between" }}>
                 <span>Prix de revient ({num(row.average_cost)} × {compact(soldQuantity)})</span>
                 <span className="num">{money(soldQuantity * row.average_cost, "EUR")}</span>
@@ -710,7 +773,8 @@ function SaleForm({
                   quantity: soldQuantity >= row.quantity ? null : soldQuantity,
                   price: soldPrice,
                   date: when,
-                  note,
+                  fees: soldFees,
+                  note: note.trim(),
                 })
               }
             >

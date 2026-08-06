@@ -156,6 +156,9 @@ class SalePayload(BaseModel):
     quantity: float | None = None  # None ⇒ toute la ligne
     price: float = Field(gt=0)
     date: str = ""
+    #: Courtage et taxes acquittés sur l'opération, en déduction de la
+    #: plus-value : ce qui rentre sur le compte est le produit net.
+    fees: float = Field(default=0.0, ge=0)
     note: str = ""
 
 
@@ -203,7 +206,8 @@ async def sell_position(symbol: str, payload: SalePayload) -> dict:
         closed_at=closed_at,
         label=position.label,
         dividends=round(collected, 2),
-        note=payload.note,
+        fees=round(payload.fees, 2),
+        note=payload.note.strip(),
     )
     realized.add(sale)
 

@@ -89,3 +89,52 @@ class TestCumuls:
         assert result["gain"] == 0
         assert result["gain_percent"] is None
         assert result["win_rate"] is None
+
+
+class TestFraisDeCession:
+    """Ce qui rentre sur le compte est le produit net, pas le produit brut."""
+
+    def test_les_frais_reduisent_la_plus_value(self):
+        s = sale(fees=25.0)
+        assert s.proceeds == pytest.approx(6000.0)
+        assert s.net_proceeds == pytest.approx(5975.0)
+        assert s.gain == pytest.approx(975.0)
+
+    def test_le_pourcentage_suit(self):
+        assert sale(fees=25.0).gain_percent == pytest.approx(975.0 / 5000.0)
+
+    def test_des_frais_peuvent_annuler_un_gain(self):
+        s = sale(sale_price=505.0, fees=100.0)
+        assert s.gain == pytest.approx(-50.0)
+
+    def test_sans_frais_le_calcul_est_inchange(self):
+        assert sale().gain == pytest.approx(1000.0)
+        assert sale().net_proceeds == pytest.approx(sale().proceeds)
+
+    def test_le_produit_brut_reste_lisible(self):
+        """Distinguer brut et net permet de vérifier le relevé de courtier."""
+        d = sale(fees=25.0).as_dict()
+        assert d["proceeds"] == pytest.approx(6000.0)
+        assert d["net_proceeds"] == pytest.approx(5975.0)
+        assert d["fees"] == pytest.approx(25.0)
+
+    def test_les_cumuls_agregent_les_frais(self):
+        result = totals([sale(id="a", fees=25.0), sale(id="b", fees=15.0)])
+        assert result["fees"] == pytest.approx(40.0)
+        assert result["gain"] == pytest.approx(1000.0 - 25.0 + 1000.0 - 15.0)
+
+    def test_le_rendement_total_part_du_gain_net(self):
+        assert sale(fees=25.0, dividends=250.0).as_dict()["total_return"] == pytest.approx(
+            1225.0
+        )
+
+
+class TestNoteDeCession:
+    def test_la_note_est_conservee(self):
+        assert sale(note="arbitrage vers la santé").as_dict()["note"] == (
+            "arbitrage vers la santé"
+        )
+
+    def test_une_note_absente_ne_vaut_pas_None(self):
+        """Le rendu doit pouvoir la traiter comme une chaîne sans test."""
+        assert sale().as_dict()["note"] == ""

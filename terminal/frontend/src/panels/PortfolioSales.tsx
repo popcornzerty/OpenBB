@@ -115,7 +115,11 @@ export function PortfolioSales({
         <div className="kpis">
           <Kpi label="Cessions" value={String(totals.count)} />
           <Kpi label="Capital engagé" value={money(totals.cost_basis, "EUR")} />
-          <Kpi label="Produit des ventes" value={money(totals.proceeds, "EUR")} />
+          <Kpi
+            label="Produit des ventes"
+            value={money(totals.net_proceeds, "EUR")}
+            sub={totals.fees > 0 ? `dont ${money(totals.fees, "EUR")} de frais` : undefined}
+          />
           <Kpi
             label="Plus-value réalisée"
             value={money(totals.gain, "EUR")}
@@ -152,12 +156,14 @@ export function PortfolioSales({
                 <th className="right">Qté</th>
                 <th className="right">PRU</th>
                 <th className="right">Prix de vente</th>
-                <th className="right">Produit</th>
+                <th className="right">Produit net</th>
+                <th className="right">Frais</th>
                 <Head label="+/- value" k="gain" right />
                 <Head label="%" k="gain_percent" right />
                 <th className="right">Dividendes</th>
                 <Head label="Total" k="total_return" right />
                 <Head label="Détention" k="holding_days" right />
+                <th>Motif</th>
                 <th />
               </tr>
             </thead>
@@ -169,7 +175,7 @@ export function PortfolioSales({
                     <button
                       className="link sym"
                       onClick={() => onOpen(sale.symbol)}
-                      title={sale.note || sale.label || sale.symbol}
+                      title={sale.label || sale.symbol}
                     >
                       {sale.symbol}
                     </button>
@@ -177,7 +183,19 @@ export function PortfolioSales({
                   <td className="right num">{compact(sale.quantity)}</td>
                   <td className="right num dim">{num(sale.average_cost)}</td>
                   <td className="right num">{price(sale.sale_price, sale.currency)}</td>
-                  <td className="right num dim">{money(sale.proceeds, "EUR")}</td>
+                  <td
+                    className="right num dim"
+                    title={
+                      sale.fees
+                        ? `Produit brut ${money(sale.proceeds, "EUR")}, moins ${money(sale.fees, "EUR")} de frais`
+                        : undefined
+                    }
+                  >
+                    {money(sale.net_proceeds, "EUR")}
+                  </td>
+                  <td className="right num faint">
+                    {sale.fees ? money(sale.fees, "EUR") : "—"}
+                  </td>
                   <td className={`right num ${changeClass(sale.gain)}`}>
                     {money(sale.gain, "EUR")}
                   </td>
@@ -196,6 +214,9 @@ export function PortfolioSales({
                       : sale.holding_days >= 365
                         ? `${num(sale.holding_days / 365, 1)} an(s)`
                         : `${sale.holding_days} j`}
+                  </td>
+                  <td className="faint" style={{ maxWidth: 260 }} title={sale.note}>
+                    {sale.note || "—"}
                   </td>
                   <td className="right">
                     <button
@@ -220,6 +241,12 @@ export function PortfolioSales({
       </div>
 
       <div className="note">
+        La plus-value est calculée sur le produit <strong>net de frais</strong> : le
+        courtage et les taxes sont payés, ils ne sont pas un gain. Le produit brut reste
+        lisible en infobulle, pour rapprochement avec le relevé du courtier.
+      </div>
+
+      <div className="note">
         Dans un PEA, ces plus-values ne sont pas imposées tant qu'aucun retrait n'est
         effectué. Ce tableau est un suivi de performance, pas une déclaration fiscale.
       </div>
@@ -227,11 +254,23 @@ export function PortfolioSales({
   );
 }
 
-function Kpi({ label, value, tone }: { label: string; value: string; tone?: "up" | "down" }) {
+function Kpi({
+  label,
+  value,
+  tone,
+  sub,
+}: {
+  label: string;
+  value: string;
+  tone?: "up" | "down";
+  /** Précision affichée sous la valeur — le montant des frais, par exemple. */
+  sub?: string;
+}) {
   return (
     <div className="kpi">
       <div className="label">{label}</div>
       <div className={`value ${tone ?? ""}`}>{value}</div>
+      {sub && <div className="faint num" style={{ fontSize: 11 }}>{sub}</div>}
     </div>
   );
 }
