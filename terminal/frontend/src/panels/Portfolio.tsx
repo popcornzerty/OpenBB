@@ -242,10 +242,14 @@ export function Portfolio({ onOpen }: { onOpen: (symbol: string) => void }) {
             {empty ? (
               <div className="panel-body">
                 <div className="callout">
-                  Aucune position. Ajoutez-en une à la main, importez un CSV, ou reprenez
-                  celles de Wealthfolio. Le CSV doit comporter au minimum les colonnes
+                  Aucune position. Ajoutez-en une à la main ou importez un CSV
+                  {/* Ne proposer Wealthfolio que s'il est réellement installé :
+                      l'évoquer sinon laisserait croire qu'il est nécessaire. */}
+                  {wealthfolioCount > 0 && <> , ou reprenez celles de Wealthfolio</>}.
+                  {" "}Le CSV doit comporter au minimum les colonnes
                   <strong> symbole</strong> et <strong>quantité</strong> ; un prix de revient,
-                  une devise et une date d'entrée sont reconnus s'ils sont présents.
+                  une devise et une date d'entrée sont reconnus s'ils sont présents. Les
+                  titres désignés par leur ISIN sont résolus automatiquement.
                 </div>
               </div>
             ) : (
