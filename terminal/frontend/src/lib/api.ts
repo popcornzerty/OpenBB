@@ -509,6 +509,20 @@ export const api = {
 
   realized: () => get<{ sales: Sale[]; totals: RealizedTotals }>("/portfolio/realized"),
 
+  /** Corrige une cession enregistrée. La quantité n'y est pas modifiable :
+   *  elle est liée au portefeuille, dont les titres ont été retirés. */
+  editSale: (
+    id: string,
+    changes: {
+      sale_price?: number;
+      fees?: number;
+      average_cost?: number;
+      closed_at?: string;
+      opened_at?: string;
+      note?: string;
+    },
+  ) => send<Sale>("PUT", `/portfolio/realized/${encodeURIComponent(id)}`, changes),
+
   cancelSale: (id: string) =>
     send<{ cancelled: Sale; restored: boolean }>(
       "DELETE",

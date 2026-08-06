@@ -138,3 +138,63 @@ class TestNoteDeCession:
     def test_une_note_absente_ne_vaut_pas_None(self):
         """Le rendu doit pouvoir la traiter comme une chaîne sans test."""
         assert sale().as_dict()["note"] == ""
+
+
+class TestModificationDUneCession:
+    """Le relevé du courtier arrive après coup.
+
+    Pouvoir reprendre le prix exact et les frais réels évite d'annuler puis de
+    ressaisir — manœuvre qui remet les titres en portefeuille entre-temps, au
+    risque d'oublier de refaire la vente.
+    """
+
+    @pytest.fixture
+    def magasin(self, tmp_path, monkeypatch):
+        from app.portfolio import realized
+
+        monkeypatch.setattr(realized, "_path", lambda: tmp_path / "realized.json")
+        realized.save([sale(id="x", fees=0.0, note="")])
+        return realized
+
+    def test_correction_du_prix(self, magasin):
+        modifiee = magasin.update("x", {"sale_price": 610.0})
+        assert modifiee.sale_price == pytest.approx(610.0)
+        assert modifiee.gain == pytest.approx(1100.0)
+
+    def test_ajout_de_frais_apres_coup(self, magasin):
+        modifiee = magasin.update("x", {"fees": 25.0})
+        assert modifiee.gain == pytest.approx(975.0)
+
+    def test_correction_du_prix_de_revient(self, magasin):
+        modifiee = magasin.update("x", {"average_cost": 520.0})
+        assert modifiee.cost_basis == pytest.approx(5200.0)
+        assert modifiee.gain == pytest.approx(800.0)
+
+    def test_correction_des_dates(self, magasin):
+        modifiee = magasin.update("x", {"opened_at": "2022-06-01", "closed_at": "2025-06-01"})
+        assert modifiee.holding_days == 1096
+
+    def test_ajout_du_motif(self, magasin):
+        assert magasin.update("x", {"note": "arbitrage"}).note == "arbitrage"
+
+    def test_les_champs_omis_ne_bougent_pas(self, magasin):
+        magasin.update("x", {"fees": 25.0})
+        conservee = magasin.get("x")
+        assert conservee.sale_price == pytest.approx(600.0)
+        assert conservee.quantity == pytest.approx(10.0)
+
+    def test_la_quantite_n_est_pas_modifiable(self, magasin):
+        """Elle est liée au portefeuille : la changer désaccorderait les deux."""
+        magasin.update("x", {"quantity": 999.0})
+        assert magasin.get("x").quantity == pytest.approx(10.0)
+
+    def test_les_dividendes_figes_ne_bougent_pas(self, magasin):
+        magasin.update("x", {"dividends": 999.0})
+        assert magasin.get("x").dividends == pytest.approx(0.0)
+
+    def test_la_modification_est_persistee(self, magasin):
+        magasin.update("x", {"fees": 25.0})
+        assert magasin.load()[0].fees == pytest.approx(25.0)
+
+    def test_une_cession_inconnue(self, magasin):
+        assert magasin.update("inexistante", {"fees": 10.0}) is None

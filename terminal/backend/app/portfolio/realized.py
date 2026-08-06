@@ -162,6 +162,35 @@ def get(sale_id: str) -> Sale | None:
     return next((s for s in load() if s.id == sale_id), None)
 
 
+#: Champs modifiables après coup.
+#:
+#: La quantité en est absente à dessein : les titres ont été retirés du
+#: portefeuille au moment de la vente, et la changer ici laisserait les deux
+#: registres en désaccord sans que rien ne le signale. Corriger une quantité
+#: passe donc par une annulation — qui remet les titres — puis une nouvelle
+#: saisie. Les dividendes non plus : ils ont été figés sur la quantité vendue.
+EDITABLE = ("sale_price", "fees", "closed_at", "note", "average_cost", "opened_at")
+
+
+def update(sale_id: str, changes: dict) -> Sale | None:
+    """Corrige une cession déjà enregistrée.
+
+    Un relevé de courtier arrive après coup, avec le prix exact et les frais
+    réels : pouvoir les reprendre évite d'annuler puis de ressaisir, opération
+    qui remet les titres en portefeuille le temps de la manœuvre.
+    """
+    with _lock:
+        sales = load()
+        target = next((s for s in sales if s.id == sale_id), None)
+        if target is None:
+            return None
+        for field_name in EDITABLE:
+            if field_name in changes and changes[field_name] is not None:
+                setattr(target, field_name, changes[field_name])
+        save(sales)
+        return target
+
+
 def remove(sale_id: str) -> list[Sale]:
     with _lock:
         sales = [s for s in load() if s.id != sale_id]

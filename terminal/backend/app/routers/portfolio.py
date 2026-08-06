@@ -231,6 +231,42 @@ async def list_realized() -> dict:
     }
 
 
+class SaleEditPayload(BaseModel):
+    """Correction d'une cession enregistrée.
+
+    Tout champ omis reste inchangé. La quantité n'y figure pas : elle est
+    liée au portefeuille, dont les titres ont été retirés à la vente.
+    """
+
+    sale_price: float | None = Field(default=None, gt=0)
+    fees: float | None = Field(default=None, ge=0)
+    average_cost: float | None = Field(default=None, ge=0)
+    closed_at: str | None = None
+    opened_at: str | None = None
+    note: str | None = None
+
+
+@router.put("/realized/{sale_id}")
+async def edit_sale(sale_id: str, payload: SaleEditPayload) -> dict:
+    """Corrige une cession — prix, frais, dates, prix de revient, motif.
+
+    Le relevé du courtier arrive après coup : pouvoir reprendre le prix exact
+    et les frais réels évite d'annuler puis de ressaisir, manœuvre qui remet
+    les titres en portefeuille entre-temps.
+    """
+    changes = payload.model_dump(exclude_none=True)
+    for key in ("closed_at", "opened_at"):
+        if key in changes:
+            changes[key] = changes[key][:10]
+    if "note" in changes:
+        changes["note"] = changes["note"].strip()
+
+    sale = realized.update(sale_id, changes)
+    if sale is None:
+        raise HTTPException(404, "Cession introuvable.")
+    return sale.as_dict()
+
+
 @router.delete("/realized/{sale_id}")
 async def cancel_sale(
     sale_id: str,

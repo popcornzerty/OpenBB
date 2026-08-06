@@ -22,6 +22,7 @@ export function PortfolioSales({
   const [notice, setNotice] = useState<string | null>(null);
   const [sort, setSort] = useState<SortKey>("closed_at");
   const [asc, setAsc] = useState(false);
+  const [editing, setEditing] = useState<Sale | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -48,6 +49,19 @@ export function PortfolioSales({
         `Cession de ${sale.symbol} annulée : ${sale.quantity} titre(s) remis en portefeuille.`,
       );
       await load();
+      onChanged();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erreur");
+    }
+  };
+
+  const save = async (id: string, changes: Parameters<typeof api.editSale>[1]) => {
+    try {
+      await api.editSale(id, changes);
+      setEditing(null);
+      setNotice("Cession corrigée.");
+      await load();
+      // La plus-value réalisée entre dans les indicateurs du portefeuille.
       onChanged();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erreur");
@@ -218,9 +232,17 @@ export function PortfolioSales({
                   <td className="faint" style={{ maxWidth: 260 }} title={sale.note}>
                     {sale.note || "—"}
                   </td>
-                  <td className="right">
+                  <td className="right" style={{ whiteSpace: "nowrap" }}>
                     <button
                       className="chip"
+                      onClick={() => setEditing(sale)}
+                      title="Corrige le prix, les frais, les dates ou le motif."
+                    >
+                      Modifier
+                    </button>
+                    <button
+                      className="chip"
+                      style={{ marginLeft: 4 }}
                       onClick={() => cancel(sale)}
                       title="Annule la cession et remet les titres en portefeuille au prix de revient d'origine."
                     >
@@ -250,7 +272,166 @@ export function PortfolioSales({
         Dans un PEA, ces plus-values ne sont pas imposées tant qu'aucun retrait n'est
         effectué. Ce tableau est un suivi de performance, pas une déclaration fiscale.
       </div>
+
+      {editing && (
+        <SaleEditForm
+          sale={editing}
+          onCancel={() => setEditing(null)}
+          onSave={(changes) => save(editing.id, changes)}
+        />
+      )}
     </div>
+  );
+}
+
+/** Correction d'une cession déjà enregistrée.
+ *
+ *  Le relevé du courtier arrive après la vente, avec le prix exact et les
+ *  frais réels. Sans cet écran, les reprendre imposait d'annuler puis de
+ *  ressaisir — au risque d'oublier la seconde étape et de laisser des titres
+ *  revenus en portefeuille. */
+function SaleEditForm({
+  sale,
+  onCancel,
+  onSave,
+}: {
+  sale: Sale;
+  onCancel: () => void;
+  onSave: (changes: Parameters<typeof api.editSale>[1]) => void;
+}) {
+  const [salePrice, setSalePrice] = useState(String(sale.sale_price));
+  const [fees, setFees] = useState(sale.fees ? String(sale.fees) : "");
+  const [averageCost, setAverageCost] = useState(String(sale.average_cost));
+  const [closedAt, setClosedAt] = useState(sale.closed_at.slice(0, 10));
+  const [openedAt, setOpenedAt] = useState(sale.opened_at.slice(0, 10));
+  const [note, setNote] = useState(sale.note);
+
+  const parsed = (value: string) =>
+    Number(value.replace(",", ".").replace(/[\s  ]/g, "")) || 0;
+  const price = parsed(salePrice);
+  const cost = parsed(averageCost);
+  const charge = parsed(fees);
+  const gain = sale.quantity * price - charge - sale.quantity * cost;
+  const valid = price > 0;
+
+  return (
+    <div className="overlay" onMouseDown={onCancel}>
+      <div className="command" onMouseDown={(event) => event.stopPropagation()}>
+        <div className="panel-head">
+          <span className="panel-title">Corriger la cession de {sale.symbol}</span>
+        </div>
+        <div className="panel-body stack" style={{ gap: 10 }}>
+          <Field
+            label="Quantité vendue"
+            hint="Non modifiable : les titres ont été retirés du portefeuille à la vente. Pour la corriger, annulez la cession — les titres reviennent — puis ressaisissez-la."
+          >
+            <input value={compact(sale.quantity)} disabled />
+          </Field>
+          <Field label="Prix de vente unitaire">
+            <input
+              value={salePrice}
+              onChange={(event) => setSalePrice(event.target.value)}
+              inputMode="decimal"
+              autoFocus
+            />
+          </Field>
+          <Field label="Frais et taxes" hint="En euros, déduits de la plus-value.">
+            <input
+              value={fees}
+              onChange={(event) => setFees(event.target.value)}
+              inputMode="decimal"
+              placeholder="0"
+            />
+          </Field>
+          <Field
+            label="Prix de revient unitaire"
+            hint="Celui qui s'appliquait à la vente. Le corriger ne touche pas au portefeuille."
+          >
+            <input
+              value={averageCost}
+              onChange={(event) => setAverageCost(event.target.value)}
+              inputMode="decimal"
+            />
+          </Field>
+          <Field label="Date de vente">
+            <input
+              type="date"
+              value={closedAt}
+              onChange={(event) => setClosedAt(event.target.value)}
+            />
+          </Field>
+          <Field label="Date d'entrée" hint="Sert au calcul de la durée de détention.">
+            <input
+              type="date"
+              value={openedAt}
+              onChange={(event) => setOpenedAt(event.target.value)}
+            />
+          </Field>
+          <Field label="Motif">
+            <input value={note} onChange={(event) => setNote(event.target.value)} />
+          </Field>
+
+          {valid && (
+            <div className="callout">
+              <div className="row" style={{ justifyContent: "space-between" }}>
+                <span>Produit net encaissé</span>
+                <strong className="num">
+                  {money(sale.quantity * price - charge, "EUR")}
+                </strong>
+              </div>
+              <div className="row" style={{ justifyContent: "space-between" }}>
+                <span>{gain >= 0 ? "Plus-value" : "Moins-value"} recalculée</span>
+                <strong className={`num ${changeClass(gain)}`}>{money(gain, "EUR")}</strong>
+              </div>
+              {Math.abs(gain - sale.gain) > 0.005 && (
+                <div className="note" style={{ marginTop: 6 }}>
+                  Enregistrée jusqu'ici : {money(sale.gain, "EUR")}. Les dividendes figés
+                  à la vente ({money(sale.dividends, "EUR")}) ne sont pas recalculés.
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="row" style={{ justifyContent: "flex-end", marginTop: 4 }}>
+            <button className="chip" onClick={onCancel}>Annuler</button>
+            <button
+              className="chip active"
+              disabled={!valid}
+              onClick={() =>
+                onSave({
+                  sale_price: price,
+                  fees: charge,
+                  average_cost: cost,
+                  closed_at: closedAt,
+                  opened_at: openedAt,
+                  note: note.trim(),
+                })
+              }
+            >
+              Enregistrer
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Field({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className="stack" style={{ gap: 3 }}>
+      <span className="label">{label}</span>
+      {children}
+      {hint && <span className="note">{hint}</span>}
+    </label>
   );
 }
 
