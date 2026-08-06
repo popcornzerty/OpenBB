@@ -81,6 +81,51 @@ class Settings:
         default_factory=lambda: float(_env("VALUATION_QUALITY_CAP", "0.15"))
     )
 
+    # --- Sources payantes, optionnelles ------------------------------------
+    #
+    # Le terminal fonctionne intégralement sans aucune clé. En poser une lève
+    # deux plafonds de la source gratuite : la profondeur des états financiers
+    # (quatre exercices publiés chez Yahoo) et l'étendue du consensus (chiffre
+    # d'affaires et bénéfice par action seulement, sur deux exercices).
+    #
+    # Aucune bascule automatique de facturation : la présence de la clé est le
+    # seul déclencheur, et son absence laisse tout le monde sur le gratuit.
+    fmp_api_key: str = field(default_factory=lambda: _env("FMP_API_KEY", ""))
+    intrinio_api_key: str = field(default_factory=lambda: _env("INTRINIO_API_KEY", ""))
+
+    #: Profondeur d'états financiers demandée quand une clé est posée. Yahoo
+    #: plafonne à 5 (dont un exercice vide) ; FMP et Intrinio remontent bien
+    #: au-delà.
+    premium_statement_limit: int = field(
+        default_factory=lambda: _env_int("PREMIUM_STATEMENT_LIMIT", 10)
+    )
+
+    @property
+    def premium_provider(self) -> str | None:
+        """Fournisseur payant configuré, le cas échéant.
+
+        Intrinio passe devant : il couvre ``forward_sales`` et ``forward_pe``
+        là où FMP s'arrête au bénéfice et à l'EBITDA.
+        """
+        if self.intrinio_api_key:
+            return "intrinio"
+        if self.fmp_api_key:
+            return "fmp"
+        return None
+
+    @property
+    def fundamentals_provider(self) -> str:
+        return self.premium_provider or "yfinance"
+
+    @property
+    def statement_limit(self) -> int:
+        """Nombre d'exercices demandés aux états financiers.
+
+        Sans clé, le plafond est celui d'OpenBB pour yfinance — au-delà,
+        l'appel est rejeté par validation.
+        """
+        return self.premium_statement_limit if self.premium_provider else 5
+
     @property
     def cache_path(self) -> Path:
         return self.state_dir / "cache.sqlite"

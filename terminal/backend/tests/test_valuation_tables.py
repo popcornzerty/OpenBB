@@ -429,3 +429,130 @@ class TestMaterialiteDesMinoritaires:
         constatée : fonder le seuil dessus le rendrait dépendant du marché."""
         result = tables.build(self._with(500.0), CLOSES, CONSENSUS, last_price=1.0)
         assert any("minoritaires significatifs" in n for n in result["notes"])
+
+
+class TestDividendeDetache:
+    """Les détachements réels priment sur les décaissements du groupe.
+
+    Le tableau de flux consolidé de Deutsche Telekom inclut ce que T-Mobile US
+    verse à ses propres minoritaires : 1,33 € par action en 2025 pour un
+    dividende réel de 0,90 €. Rapprochée du montant annoncé pour l'exercice
+    suivant, cette base gonflée faisait apparaître une coupe inexistante.
+    """
+
+    DETACHEMENTS = [
+        {"ex_dividend_date": "2025-04-10", "amount": 0.90},
+        {"ex_dividend_date": "2024-04-11", "amount": 0.77},
+        {"ex_dividend_date": "2023-04-06", "amount": 0.70},
+    ]
+
+    def test_les_detachements_de_l_exercice_sont_sommes(self):
+        result = tables.build(
+            STATEMENTS, CLOSES, CONSENSUS, last_price=30.0, dividends=self.DETACHEMENTS
+        )
+        values = row_of(result["income_rows"], "dividend_ps")["values"]
+        assert values[2] == pytest.approx(0.90)  # exercice 2025
+        assert values[1] == pytest.approx(0.77)  # exercice 2024
+
+    def test_plusieurs_acomptes_dans_l_exercice(self):
+        rows = [
+            {"ex_dividend_date": "2025-03-15", "amount": 0.30},
+            {"ex_dividend_date": "2025-09-15", "amount": 0.30},
+            {"ex_dividend_date": "2025-12-15", "amount": 0.30},
+        ]
+        result = tables.build(
+            STATEMENTS, CLOSES, CONSENSUS, last_price=30.0, dividends=rows
+        )
+        assert row_of(result["income_rows"], "dividend_ps")["values"][2] == pytest.approx(0.90)
+
+    def test_un_exercice_decale_retient_la_bonne_fenetre(self):
+        """Alstom clôture en mars : l'exercice ne suit pas l'année civile."""
+        statements = {
+            "income": [income(2026) | {"period_ending": "2026-03-31"}],
+            "balance": [balance(2026) | {"period_ending": "2026-03-31"}],
+            "cash": [cash(2026) | {"period_ending": "2026-03-31"}],
+        }
+        rows = [
+            {"ex_dividend_date": "2025-07-10", "amount": 0.08},  # dans l'exercice
+            {"ex_dividend_date": "2026-07-10", "amount": 0.12},  # exercice suivant
+        ]
+        result = tables.build(
+            statements, CLOSES, {"periods": [], "price_target": {}},
+            last_price=30.0, dividends=rows,
+        )
+        assert row_of(result["income_rows"], "dividend_ps")["values"][0] == pytest.approx(0.08)
+
+    def test_sans_historique_les_decaissements_prennent_le_relais(self):
+        """Une ligne biaisée vaut mieux qu'une ligne vide."""
+        result = tables.build(STATEMENTS, CLOSES, CONSENSUS, last_price=30.0)
+        values = row_of(result["income_rows"], "dividend_ps")["values"]
+        assert values[2] == pytest.approx(1.0)  # 50 versés / 50 titres
+
+    def test_un_exercice_sans_detachement_reste_vide(self):
+        rows = [{"ex_dividend_date": "2019-04-10", "amount": 0.50}]
+        result = tables.build(
+            STATEMENTS, CLOSES, CONSENSUS, last_price=30.0, dividends=rows
+        )
+        values = row_of(result["income_rows"], "dividend_ps")["values"]
+        # Aucun détachement dans la fenêtre : on retombe sur les décaissements.
+        assert values[2] == pytest.approx(1.0)
+
+
+class TestRythmeDeDetachement:
+    """Les dates de détachement glissent d'une année sur l'autre.
+
+    TotalEnergies a connu cinq détachements en 2025 et quatre en 2023, ses
+    versements trimestriels franchissant le 1er janvier. Compter par fenêtre
+    calendaire faisait osciller son rendement affiché entre 4,6 % et 7,4 %
+    alors qu'il n'avait pas bougé. On retient donc un nombre fixe de
+    versements, déduit du rythme observé.
+    """
+
+    TTE = [
+        {"ex_dividend_date": d, "amount": a}
+        for d, a in [
+            ("2024-01-02", 0.74), ("2024-03-20", 0.74), ("2024-06-19", 0.79),
+            ("2024-09-25", 0.79), ("2025-01-02", 0.79), ("2025-03-26", 0.79),
+            ("2025-06-19", 0.85), ("2025-10-01", 0.85), ("2025-12-31", 0.85),
+        ]
+    ]
+
+    def test_le_rythme_trimestriel_est_reconnu(self):
+        rows = tables._detachments(self.TTE)
+        assert tables._payments_per_year(rows) == 4
+
+    def test_quatre_versements_malgre_cinq_detachements_dans_l_annee(self):
+        rows = tables._detachments(self.TTE)
+        total = tables._dividend_per_year(rows, 4, "2025-12-31")
+        # Les quatre derniers : 0,79 + 0,85 × 3.
+        assert total == pytest.approx(3.34)
+
+    def test_un_versement_annuel(self):
+        rows = tables._detachments([
+            {"ex_dividend_date": "2024-04-11", "amount": 0.77},
+            {"ex_dividend_date": "2025-04-10", "amount": 0.90},
+            {"ex_dividend_date": "2026-04-02", "amount": 1.00},
+        ])
+        assert tables._payments_per_year(rows) == 1
+        assert tables._dividend_per_year(rows, 1, "2025-12-31") == pytest.approx(0.90)
+
+    def test_deux_acomptes_inegaux(self):
+        """LVMH verse un acompte en décembre et le solde en avril."""
+        rows = tables._detachments([
+            {"ex_dividend_date": "2024-12-04", "amount": 5.50},
+            {"ex_dividend_date": "2025-04-24", "amount": 7.50},
+            {"ex_dividend_date": "2025-12-03", "amount": 5.50},
+        ])
+        assert tables._payments_per_year(rows) == 2
+        assert tables._dividend_per_year(rows, 2, "2025-12-31") == pytest.approx(13.00)
+
+    def test_un_detachement_juste_apres_la_cloture_est_rattache(self):
+        rows = tables._detachments([
+            {"ex_dividend_date": "2025-01-06", "amount": 1.00},
+        ])
+        assert tables._dividend_per_year(rows, 1, "2024-12-31") == pytest.approx(1.00)
+
+    def test_un_dividende_interrompu_ne_se_reporte_pas(self):
+        """Un versement isolé et ancien n'appartient à aucun exercice récent."""
+        rows = tables._detachments([{"ex_dividend_date": "2019-04-10", "amount": 0.50}])
+        assert tables._dividend_per_year(rows, 1, "2025-12-31") is None

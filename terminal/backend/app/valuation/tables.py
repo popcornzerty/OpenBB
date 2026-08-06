@@ -171,18 +171,96 @@ def _row(key: str, label: str, unit: str, values: list, note: str = "") -> dict:
     }
 
 
+def _as_day(value: Any) -> dt.date | None:
+    if isinstance(value, dt.datetime):
+        return value.date()
+    if isinstance(value, dt.date):
+        return value
+    try:
+        return dt.date.fromisoformat(str(value)[:10])
+    except (ValueError, TypeError):
+        return None
+
+
+def _detachments(dividends: list[dict]) -> list[tuple[dt.date, float]]:
+    """Historique des détachements, du plus ancien au plus récent."""
+    rows = []
+    for row in dividends or []:
+        when = _as_day(row.get("ex_dividend_date"))
+        amount = _number(row.get("amount"))
+        if when is not None and amount is not None:
+            rows.append((when, amount))
+    rows.sort()
+    return rows
+
+
+def _payments_per_year(rows: list[tuple[dt.date, float]]) -> int:
+    """Nombre de détachements attendus par an, déduit du rythme observé."""
+    if len(rows) < 3:
+        return 1
+    recent = rows[-9:]
+    gaps = sorted(
+        (b[0] - a[0]).days for a, b in zip(recent, recent[1:]) if (b[0] - a[0]).days > 0
+    )
+    if not gaps:
+        return 1
+    # Médiane au sens strict : sur un nombre pair d'intervalles, retenir le
+    # seul élément supérieur sous-estimerait la fréquence dès qu'un versement
+    # manque à l'appel.
+    middle = len(gaps) // 2
+    median = gaps[middle] if len(gaps) % 2 else (gaps[middle - 1] + gaps[middle]) / 2
+    return max(1, min(12, round(365 / median)))
+
+
+def _dividend_per_year(
+    rows: list[tuple[dt.date, float]], per_year: int, period_ending: str | None
+) -> float | None:
+    """Dividende de l'exercice : les ``per_year`` derniers détachements.
+
+    Préféré aux décaissements du tableau de flux, qui portent sur l'ensemble
+    consolidé : ceux de Deutsche Telekom incluent ce que T-Mobile US verse à
+    ses propres minoritaires, et donnaient 1,33 € par action en 2025 pour un
+    dividende réel de 0,90 €. Rapprochée du montant annoncé pour l'exercice
+    suivant, cette base gonflée faisait apparaître une coupe inexistante.
+
+    Le comptage retient un nombre fixe de versements plutôt qu'une fenêtre
+    calendaire, car les dates de détachement glissent : TotalEnergies en a
+    connu cinq en 2025 et quatre en 2023, ce qui faisait osciller son
+    rendement affiché entre 4,6 % et 7,4 % sans qu'il ait bougé.
+    """
+    end = _as_day(period_ending)
+    if not rows or end is None:
+        return None
+    # Une fenêtre de tolérance évite d'attraper le cycle précédent lorsque le
+    # dernier détachement de l'exercice tombe quelques jours après la clôture.
+    horizon = end + dt.timedelta(days=15)
+    past = [(when, amount) for when, amount in rows if when <= horizon]
+    if not past:
+        return None
+    # Le dernier détachement retenu doit appartenir à l'exercice : sans ce
+    # test, un versement isolé et ancien serait attribué à chaque exercice
+    # postérieur, faisant apparaître un dividende là où il n'y en a plus.
+    if (end - past[-1][0]).days > 400:
+        return None
+    return sum(amount for _, amount in past[-per_year:])
+
+
 def build(
     statements: dict[str, list[dict]],
     history: list[dict],
     consensus: dict,
     *,
     last_price: float | None = None,
+    dividends: list[dict] | None = None,
 ) -> dict:
     """Assemble les deux tableaux.
 
     ``statements`` porte les trois états financiers du plus récent au plus
     ancien, ``consensus`` la sortie du fournisseur d'estimations.
     """
+    detachments = _detachments(dividends or [])
+    payments_per_year = _payments_per_year(detachments)
+
     income = list(statements.get("income") or [])
     balance = {(_year_of(r.get("period_ending"))): r for r in statements.get("balance") or []}
     cash = {(_year_of(r.get("period_ending"))): r for r in statements.get("cash") or []}
@@ -266,8 +344,17 @@ def build(
                 "aux PER historiques de ce tableau."
             )
 
+        # Le dividende annoncé ne vaut que pour le premier exercice estimé :
+        # c'est un montant indicatif à douze mois, pas une prévision par
+        # exercice. Le reporter sur les suivants afficherait une stabilité que
+        # personne n'a prévue.
+        announced = _number(consensus.get("dividend_rate"))
+
         for period in periods:
-            year = anchor + int(period.get("offset") or 0)
+            offset = int(period.get("offset") or 0)
+            year = anchor + offset
+            if offset == 0 and announced and period.get("dividend") is None:
+                period = {**period, "dividend": announced, "dividend_announced": True}
             estimate_data[year] = period
             columns.append(
                 Column(
@@ -293,14 +380,16 @@ def build(
         if estimated is not None:
             revenue.append(_number(estimated.get("revenue")))
             eps.append(_number(estimated.get("eps")))
-            # Le consensus gratuit s'arrête là ; le reste demeure inconnu.
-            ebitda.append(None)
-            ebit.append(None)
-            shares.append(None)
-            dividend_ps.append(None)
-            fcf.append(None)
-            net_debt.append(None)
-            equity.append(None)
+            # Les agrégats ci-dessous ne sont fournis que par un consensus
+            # complet, réservé aux sources payantes. Absents, ils restent
+            # vides : les extrapoler donnerait un tableau plein et faux.
+            ebitda.append(_number(estimated.get("ebitda")))
+            ebit.append(_number(estimated.get("ebit")))
+            shares.append(_number(estimated.get("shares")))
+            dividend_ps.append(_number(estimated.get("dividend")))
+            fcf.append(_number(estimated.get("free_cash_flow")))
+            net_debt.append(_number(estimated.get("net_debt")))
+            equity.append(_number(estimated.get("equity")))
             minority.append(None)
             # Le résultat net estimé se déduit du BNPA et du nombre de titres
             # le plus récent : c'est une reconstitution, signalée comme telle.
@@ -346,8 +435,16 @@ def build(
         )
         shares.append(count)
 
-        paid = _first(cash_row, "cash_dividends_paid")
-        dividend_ps.append(abs(paid) / count if paid and count else None)
+        detached = _dividend_per_year(
+            detachments, payments_per_year, row.get("period_ending")
+        )
+        if detached is None:
+            # Sans historique de détachements, les décaissements du tableau de
+            # flux restent le seul recours — biaisés par les minoritaires,
+            # mais préférables à une ligne vide.
+            paid = _first(cash_row, "cash_dividends_paid")
+            detached = abs(paid) / count if paid and count else None
+        dividend_ps.append(detached)
         fcf.append(_first(cash_row, "free_cash_flow"))
 
         debt = _first(balance_row, "net_debt")
@@ -390,9 +487,10 @@ def build(
              [_margin(a, b) for a, b in zip(net_income, revenue)]),
         _row("eps", "BNPA dilué", "per_share", eps),
         _row("eps_growth", "Croissance du BNPA", "percent", growth(eps)),
-        _row("dividend_ps", "Dividende versé par action", "per_share", dividend_ps,
-             "Décaissements de l'exercice rapportés au nombre de titres, "
-             "et non le dividende annoncé au titre de l'exercice."),
+        _row("dividend_ps", "Dividende détaché par action", "per_share", dividend_ps,
+             "Exercices publiés : somme des détachements survenus au cours de "
+             "l'exercice. Premier exercice estimé : dividende annuel indicatif "
+             "annoncé par la société, à défaut d'un consensus par exercice."),
         _row("free_cash_flow", "Flux de trésorerie disponible", "currency", fcf),
         _row("net_debt", "Dette nette", "currency", net_debt,
              "Négative lorsque la trésorerie excède la dette."),
@@ -504,6 +602,14 @@ def build(
             "la capitalisation ne représente que la maison mère : le rendement du "
             "flux rapporté à la capitalisation en est flatté. La ligne rapportée à "
             "la valeur d'entreprise ne souffre pas de ce biais."
+        )
+
+    if any(p.get("dividend_announced") for p in estimate_data.values()):
+        notes.append(
+            "Le dividende du premier exercice estimé est le montant indicatif "
+            "annoncé par la société, non un consensus d'analystes : il ne "
+            "figure que sur cette colonne, et les exercices suivants restent "
+            "vides plutôt que de reconduire un montant que personne n'a prévu."
         )
 
     if any(column.thin for column in columns):

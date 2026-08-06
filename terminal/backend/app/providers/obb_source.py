@@ -26,6 +26,25 @@ obb.user.preferences.output_type = "dataframe"
 
 DEFAULT_PROVIDER = "yfinance"
 
+
+def _register_credentials() -> None:
+    """Transmet à OpenBB les clés éventuellement configurées.
+
+    Sans clé, rien n'est posé et tous les appels restent sur yfinance. Les
+    cotations et l'historique y demeurent de toute façon : elles sont
+    gratuites, complètes sur les places européennes, et une clé payante n'y
+    apporterait rien.
+    """
+    for name, value in (
+        ("fmp_api_key", settings.fmp_api_key),
+        ("intrinio_api_key", settings.intrinio_api_key),
+    ):
+        if value:
+            setattr(obb.user.credentials, name, value)
+
+
+_register_credentials()
+
 #: Décalage appliqué entre la clôture d'exercice et la disponibilité publique
 #: des comptes. Les grandes capitalisations européennes publient leurs comptes
 #: annuels deux à trois mois après la clôture ; utiliser la date de clôture
@@ -223,14 +242,17 @@ async def statements(
     symbol: str,
     period: str = "annual",
     limit: int = 5,
-    provider: str = DEFAULT_PROVIDER,
+    provider: str | None = None,
 ) -> dict[str, list[dict]]:
     """Les trois états financiers, récupérés en parallèle.
 
-    ``limit`` est plafonné à 5 : c'est la borne imposée par OpenBB pour
-    yfinance, et Yahoo ne publie de toute façon pas davantage d'exercices.
+    Sans clé payante, ``limit`` est plafonné à 5 : c'est la borne imposée par
+    OpenBB pour yfinance, qui ne publie de toute façon que quatre exercices
+    exploitables. Une clé lève ce plafond et le fournisseur change avec lui.
     """
-    limit = max(1, min(limit, 5))
+    provider = provider or settings.fundamentals_provider
+    ceiling = settings.statement_limit
+    limit = max(1, min(limit, ceiling))
     income, balance, cash = await asyncio.gather(
         _statement("income", symbol, period, limit, provider),
         _statement("balance", symbol, period, limit, provider),

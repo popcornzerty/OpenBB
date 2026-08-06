@@ -113,6 +113,11 @@ def _fetch(symbol: str) -> dict:
         # rapporter l'un à l'autre donnait un taux de distribution de 12 000 %.
         "trailing_eps": _number(info.get("trailingEps")),
         "listing_currency": info.get("currency"),
+        # Dividende annuel indicatif à douze mois, en devise de cotation. Ce
+        # n'est pas un consensus par exercice — la source n'en publie pas —
+        # mais le montant que la société a annoncé ou vient de détacher. Il ne
+        # vaut donc que pour le premier exercice estimé.
+        "dividend_rate": _number(info.get("dividendRate")),
         "price_target": {
             "mean": _number(targets.get("mean")),
             "median": _number(targets.get("median")),
@@ -124,18 +129,117 @@ def _fetch(symbol: str) -> dict:
     }
 
 
+def _premium_periods(symbol: str, provider: str) -> list[dict]:
+    """Consensus élargi, quand une clé payante est configurée.
+
+    FMP et Intrinio publient les estimations de bénéfice et d'EBITDA sur
+    plusieurs exercices ; Intrinio y ajoute le chiffre d'affaires. Les clés
+    ``eps``, ``revenue`` et ``ebitda`` alimentent les mêmes colonnes que le
+    consensus gratuit — le tableau ne fait aucune différence entre les deux.
+
+    Toute défaillance renvoie une liste vide : l'appelant retombe alors sur la
+    source gratuite plutôt que de perdre ses colonnes estimées.
+    """
+    from openbb import obb
+
+    by_year: dict[int, dict] = {}
+
+    def absorb(route, field: str) -> None:
+        try:
+            rows = route(symbol, provider=provider).results
+        except Exception:  # noqa: BLE001
+            return
+        for row in rows:
+            data = row.model_dump() if hasattr(row, "model_dump") else dict(row)
+            stamp = data.get("date") or data.get("fiscal_year") or data.get("period_ending")
+            year = None
+            if isinstance(stamp, int):
+                year = stamp
+            elif stamp is not None:
+                try:
+                    year = dt.date.fromisoformat(str(stamp)[:10]).year
+                except ValueError:
+                    year = None
+            if year is None:
+                continue
+            value = _number(
+                data.get("mean")
+                or data.get("estimated_eps_avg")
+                or data.get("estimated_ebitda_avg")
+                or data.get("estimated_revenue_avg")
+                or data.get("value")
+            )
+            if value is None:
+                continue
+            bucket = by_year.setdefault(year, {"year": year})
+            bucket[field] = value
+            count = _number(
+                data.get("number_of_analysts") or data.get("analyst_count")
+            )
+            if count:
+                bucket["analysts"] = int(count)
+
+    estimates_router = obb.equity.estimates
+    absorb(estimates_router.forward_eps, "eps")
+    absorb(estimates_router.forward_ebitda, "ebitda")
+    if hasattr(estimates_router, "forward_sales"):
+        absorb(estimates_router.forward_sales, "revenue")
+
+    ordered = sorted(by_year.values(), key=lambda b: b["year"])
+    return [b for b in ordered if b.get("eps") is not None or b.get("revenue") is not None]
+
+
+def _merge_premium(free: dict, premium: list[dict]) -> dict:
+    """Complète les périodes gratuites avec les agrégats payants.
+
+    L'ancrage des colonnes reste celui de la source gratuite, dont on sait
+    qu'il se raccorde aux comptes publiés. Le consensus payant n'apporte que
+    des agrégats supplémentaires et des exercices plus lointains.
+    """
+    if not premium:
+        return free
+
+    periods = list(free.get("periods") or [])
+    anchor_year = None
+    if periods and free.get("fiscal_year_end"):
+        try:
+            anchor_year = dt.date.fromisoformat(free["fiscal_year_end"][:10]).year + 1
+        except ValueError:
+            anchor_year = None
+    if anchor_year is None:
+        return free
+
+    by_offset = {int(p.get("offset") or 0): p for p in periods}
+    for bucket in premium:
+        offset = bucket["year"] - anchor_year
+        if offset < 0:
+            continue
+        target = by_offset.setdefault(offset, {"offset": offset})
+        for key in ("eps", "revenue", "ebitda", "analysts"):
+            if bucket.get(key) is not None and target.get(key) is None:
+                target[key] = bucket[key]
+
+    return {**free, "periods": [by_offset[k] for k in sorted(by_offset)]}
+
+
 async def consensus(symbol: str) -> dict:
     """Estimations de bénéfice et de chiffre d'affaires, et cible de cours.
 
     Renvoie toujours une structure exploitable : un titre non suivi donne une
     liste de périodes vide, pas une exception. L'écran doit pouvoir afficher
     l'historique même sans consensus.
+
+    Une clé payante configurée enrichit le résultat — EBITDA estimé, exercices
+    plus lointains — sans changer la forme des données ni le comportement en
+    cas d'échec.
     """
 
     async def produce():
         try:
-            return await asyncio.to_thread(_fetch, symbol)
+            free = await asyncio.to_thread(_fetch, symbol)
         except Exception:  # noqa: BLE001
+            free = None
+        if free is None:
             return {
                 "periods": [],
                 "fiscal_year_end": None,
@@ -143,9 +247,21 @@ async def consensus(symbol: str) -> dict:
                 "currency": None,
                 "trailing_eps": None,
                 "listing_currency": None,
+                "dividend_rate": None,
             }
 
-    key = f"estimates:v2:{symbol}"
+        provider = settings.premium_provider
+        if provider is None:
+            return free
+        try:
+            premium = await asyncio.to_thread(_premium_periods, symbol, provider)
+        except Exception:  # noqa: BLE001
+            premium = []
+        return _merge_premium(free, premium)
+
+    # La clé de cache porte le fournisseur : poser ou retirer une clé d'API
+    # doit invalider les estimations, non ressortir celles de l'autre source.
+    key = f"estimates:v3:{settings.premium_provider or 'free'}:{symbol}"
     value, _, _ = await cache.resolve(key, TTL_SECONDS, produce)
     return value
 

@@ -64,7 +64,12 @@ async def valuation_for(symbol: str) -> dict:
     # le rabote. L'échec de cette collecte ne doit pas priver de la courbe.
     dividend_block: dict | None = None
     try:
-        rows = await obb_source.dividends(symbol)
+        dividend_rows = await obb_source.dividends(symbol)
+    except Exception:  # noqa: BLE001
+        dividend_rows = []
+
+    try:
+        rows = dividend_rows
         cagr, window = dividend_growth(rows)
         coverage = None
         cash_rows = statements.get("cash") or []
@@ -115,6 +120,7 @@ async def valuation_for(symbol: str) -> dict:
             history,
             consensus_data,
             last_price=quote_data.get("last_price") or quote_data.get("prev_close"),
+            dividends=dividend_rows,
         )
     except Exception:  # noqa: BLE001
         result["tables"] = None
