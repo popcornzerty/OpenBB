@@ -16,22 +16,41 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.portfolio import store
+from app.portfolio import realized, store, targets
 from app.providers import wealthfolio_db
 
 
 @pytest.fixture
 def sans_wealthfolio(tmp_path, monkeypatch):
-    """Base Wealthfolio introuvable, et portefeuille isolé du poste."""
+    """Base Wealthfolio introuvable, et état entièrement isolé du poste.
+
+    Les **trois** magasins sont redirigés. N'en isoler qu'un a suffi à écrire
+    de fausses cessions et à écraser les pondérations cibles dans les données
+    réelles de l'utilisateur : ces tests exercent des routes qui écrivent, et
+    tout ce qu'elles touchent doit atterrir dans le répertoire temporaire.
+    """
     absente = tmp_path / "nulle-part" / "app.db"
     monkeypatch.setattr(wealthfolio_db, "database_path", lambda: absente)
 
     etat = tmp_path / "etat"
     etat.mkdir()
     monkeypatch.setattr(store, "_path", lambda: etat / "positions.json")
+    monkeypatch.setattr(realized, "_path", lambda: etat / "realized.json")
+    monkeypatch.setattr(targets, "_path", lambda: etat / "allocation_targets.json")
 
     with TestClient(app) as client:
         yield client
+
+
+def test_l_isolation_couvre_tous_les_magasins(sans_wealthfolio, tmp_path):
+    """Garde-fou : une écriture ne doit jamais sortir du répertoire temporaire.
+
+    Sans ce test, ajouter demain un quatrième magasin sans l'isoler
+    repasserait inaperçu jusqu'à ce qu'il pollue des données réelles.
+    """
+    for module in (store, realized, targets):
+        chemin = Path(module._path())
+        assert tmp_path in chemin.parents, f"{module.__name__} écrit hors du bac à sable"
 
 
 class TestLesEcransTiennentSansWealthfolio:
