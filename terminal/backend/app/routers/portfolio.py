@@ -423,6 +423,19 @@ async def holdings(
     ]
     upcoming.sort(key=lambda x: x["date"])
 
+    # Cumul au fil des échéances : ce qu'on aura touché une fois chaque
+    # détachement passé. La liste n'est plus tronquée, sans quoi le total
+    # porterait sur une partie des lignes en prétendant les couvrir toutes.
+    running = 0.0
+    for item in upcoming:
+        if item["amount"] is not None:
+            running += item["amount"]
+        item["cumulative"] = round(running, 2)
+    upcoming_total = round(running, 2)
+    # Les lignes dont le montant est inconnu ne peuvent pas entrer dans le
+    # cumul ; le signaler évite de lire un total pour un exhaustif.
+    upcoming_unknown = sum(1 for item in upcoming if item["amount"] is None)
+
     return {
         "rows": rows,
         "updated_at": portfolio.updated_at,
@@ -462,7 +475,9 @@ async def holdings(
                 if (total_cost + closed["cost_basis"])
                 else None
             ),
-            "upcoming": upcoming[:8],
+            "upcoming": upcoming,
+            "upcoming_total": upcoming_total,
+            "upcoming_unknown": upcoming_unknown,
         },
     }
 

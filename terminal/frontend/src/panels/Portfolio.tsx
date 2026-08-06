@@ -372,6 +372,10 @@ export function Portfolio({ onOpen }: { onOpen: (symbol: string) => void }) {
             <div className="panel">
               <div className="panel-head">
                 <span className="panel-title">Prochains dividendes attendus</span>
+                <span className="spacer" style={{ flex: 1 }} />
+                <span className="badge plain">
+                  {money(summary.upcoming_total, "EUR")} attendus
+                </span>
               </div>
               <div className="panel-body flush table-wrap">
                 <table>
@@ -380,6 +384,9 @@ export function Portfolio({ onOpen }: { onOpen: (symbol: string) => void }) {
                       <th>Date estimée</th>
                       <th>Titre</th>
                       <th className="right">Montant attendu</th>
+                      <th className="right" title="Somme des détachements jusqu'à cette date incluse">
+                        Cumulé
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -388,16 +395,37 @@ export function Portfolio({ onOpen }: { onOpen: (symbol: string) => void }) {
                         <td className="num">≈ {date(item.date)}</td>
                         <td className="sym">{item.symbol}</td>
                         <td className="right num">{money(item.amount, "EUR")}</td>
+                        <td className="right num dim">{money(item.cumulative, "EUR")}</td>
                       </tr>
                     ))}
                   </tbody>
+                  <tfoot>
+                    <tr>
+                      <td colSpan={2} className="faint">
+                        Total sur {summary.upcoming.length} détachement(s)
+                      </td>
+                      <td className="right num" />
+                      <td className="right num">
+                        <strong>{money(summary.upcoming_total, "EUR")}</strong>
+                      </td>
+                    </tr>
+                  </tfoot>
                 </table>
               </div>
               <div className="panel-body">
                 <div className="note">
                   Dates projetées d'après le rythme de versement observé, montants estimés
                   d'après le dernier détachement connu. Aucune source gratuite ne publie le
-                  calendrier ni les montants annoncés pour les valeurs européennes.
+                  calendrier ni les montants annoncés pour les valeurs européennes. Le
+                  cumul ne couvre qu'un détachement par ligne — le prochain — et non une
+                  année entière de distribution.
+                  {summary.upcoming_unknown > 0 && (
+                    <>
+                      {" "}
+                      {summary.upcoming_unknown} ligne(s) sans montant estimé restent hors
+                      du total.
+                    </>
+                  )}
                 </div>
               </div>
             </div>

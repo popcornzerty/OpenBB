@@ -394,7 +394,16 @@ export interface PortfolioSummary {
   overall_gain: number;
   /** Rapporté au capital engagé, lignes vendues comprises. */
   overall_gain_percent: number | null;
-  upcoming: { symbol: string; date: string; amount: number | null }[];
+  upcoming: {
+    symbol: string;
+    date: string;
+    amount: number | null;
+    /** Somme des détachements attendus jusqu'à cette date incluse. */
+    cumulative: number;
+  }[];
+  upcoming_total: number;
+  /** Lignes dont le montant reste inconnu, donc absentes du cumul. */
+  upcoming_unknown: number;
 }
 
 /** Une cession, totale ou partielle. */
