@@ -258,6 +258,96 @@ export interface MultipleHistory {
   stats_backfilled: boolean;
 }
 
+/** Un franchissement de seuil déclaré à l'AMF. */
+export interface AmfCrossing {
+  id: string;
+  symbol: string;
+  societe: string | null;
+  publie_le: string;
+  document: string | null;
+  declarant: string | null;
+  /** « morale », « physique » ou « inconnue ». */
+  declarant_nature: string;
+  sens: "hausse" | "baisse" | null;
+  seuil: number | null;
+  seuil_nature: string | null;
+  franchi_le: string | null;
+  lisible: boolean;
+}
+
+/** Une déclaration de dirigeant (initié). */
+export interface AmfInsider {
+  id: number;
+  numero: string | null;
+  symbol: string;
+  societe: string | null;
+  publie_le: string;
+  document: string | null;
+  declarant: string | null;
+  fonction: string | null;
+  emetteur: string | null;
+  nature: string | null;
+  sens: "achat" | "vente" | null;
+  instrument: string | null;
+  isin: string | null;
+  lieu: string | null;
+  transaction_le: string | null;
+  prix: number | null;
+  devise: string | null;
+  volume: number | null;
+  montant: number | null;
+  lisible: boolean;
+}
+
+export interface AmfMovements {
+  scope: string;
+  name: string;
+  days: number;
+  symbols: string[];
+  /** Valeurs que la source peut couvrir : émetteurs cotés en France. */
+  in_scope: string[];
+  out_of_scope: string[];
+  crossings: AmfCrossing[];
+  crossings_scanned: number;
+  insiders: AmfInsider[];
+  since: string;
+}
+
+/** Une ligne détenue par un gérant américain déclarant à la SEC. */
+export interface ManagerHolding {
+  holder: string;
+  categorie: string;
+  symbol: string;
+  date: string;
+  shares: number | null;
+  value: number | null;
+  pct_held: number | null;
+  /** Variation depuis le dépôt précédent : le mouvement du gérant. */
+  pct_change: number | null;
+}
+
+export interface Manager {
+  holder: string;
+  categorie: string;
+  positions: number;
+  value: number;
+  last_reported: string;
+  achats: number;
+  ventes: number;
+  holdings: ManagerHolding[];
+}
+
+export interface Managers {
+  scope: string;
+  name: string;
+  managers: Manager[];
+  candidates: number;
+  /** Lignes de fonds indiciels écartées du classement. */
+  index_lines_excluded: number;
+  as_of: string;
+  symbols: string[];
+}
+
 export interface Valuation {
   symbol: string;
   name: string;
@@ -609,6 +699,14 @@ export const api = {
   valuation: (symbol: string) => get<Valuation>(`/valuation/${encodeURIComponent(symbol)}`),
 
   watchlists: () => get<{ watchlists: Record<string, string[]> }>("/watchlists"),
+
+  /** Mouvements déclarés à l'AMF sur un portefeuille ou une liste de suivi. */
+  amfMovements: (scope: "portefeuille" | "liste", name = "", days = 180) =>
+    get<AmfMovements>("/alerts/amf", { scope, name, days }),
+
+  /** Gérants américains les plus présents sur ces valeurs européennes. */
+  managers: (scope: "portefeuille" | "liste", name = "", top = 4) =>
+    get<Managers>("/alerts/managers", { scope, name, top }),
 
   /** Crée ou remplace une liste de suivi. */
   saveWatchlist: (name: string, symbols: string[]) =>

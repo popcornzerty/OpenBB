@@ -1,6 +1,7 @@
 """Routes HTTP du terminal."""
 
 from . import (
+    alerts,
     company,
     market,
     portfolio,
@@ -19,6 +20,7 @@ ROUTERS = [
     valuation.router,
     watchlist.router,
     wealthfolio.router,
+    alerts.router,
     portfolio.router,
 ]
 

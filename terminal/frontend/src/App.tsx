@@ -5,7 +5,7 @@ import { Company } from "./panels/Company";
 import { Portfolio } from "./panels/Portfolio";
 import { Screener } from "./panels/Screener";
 import { Valuation } from "./panels/Valuation";
-import { Watchlist } from "./panels/Watchlist";
+import { Market } from "./panels/Market";
 
 type View = "marche" | "portefeuille" | "screener" | "societe" | "valorisation";
 
@@ -90,7 +90,7 @@ export default function App() {
       <IndicesStrip />
 
       <main className="main">
-        {view === "marche" && <Watchlist onOpen={openSymbol} />}
+        {view === "marche" && <Market onOpen={openSymbol} />}
         {view === "portefeuille" && <Portfolio onOpen={openSymbol} />}
         {view === "screener" && <Screener onOpen={openSymbol} />}
         {view === "societe" && <Company symbol={symbol} />}

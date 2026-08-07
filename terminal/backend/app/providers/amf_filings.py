@@ -184,10 +184,9 @@ MAX_PAGES = 6
 async def _index(since: dt.date) -> list[dict]:
     """Tous les avis de franchissement publiés depuis ``since``.
 
-    On ne filtre pas ici sur les valeurs suivies : la correspondance entre un
-    code ISIN et un ticker Yahoo ne s'obtient que par résolution, et il vaut
-    mieux la faire sur les quelques dizaines d'émetteurs concernés que
-    d'inventer une table à maintenir.
+    Le filtrage sur les valeurs suivies se fait ensuite, en mémoire, à partir
+    de la raison sociale que porte l'index : demander à l'API une liste de
+    codes ISIN supposerait de les connaître, ce qui n'est pas le cas.
     """
     where = (
         f"sous_type_d_information='{SUBTYPE}' "
@@ -247,48 +246,32 @@ async def _detail(row: dict) -> dict:
     return {**row, **value, "lisible": True}
 
 
-async def _tickers_for(isins: list[str]) -> dict[str, str]:
-    """Résout des codes ISIN en tickers, en parallèle borné et en cache.
-
-    La correspondance est stable : une fois établie, elle se garde longtemps.
-    """
-    from . import yahoo_search
-
-    semaphore = asyncio.Semaphore(4)
-
-    async def one(isin: str) -> tuple[str, str | None]:
-        async def produce():
-            try:
-                return await yahoo_search.resolve_isin(isin)
-            except Exception:  # noqa: BLE001
-                return None
-
-        async with semaphore:
-            value, _, _ = await cache.resolve(f"amf:isin:v1:{isin}", TTL_DOCUMENT, produce)
-        return isin, value
-
-    pairs = await asyncio.gather(*(one(i) for i in sorted(set(isins)) if i))
-    return {isin: ticker for isin, ticker in pairs if ticker}
-
-
-async def crossings(symbols: list[str], days: int = 120) -> dict:
+async def crossings(entries: list[tuple[str, str]], days: int = 120) -> dict:
     """Franchissements de seuils récents sur ces valeurs, déclarant nommé.
+
+    ``entries`` associe un symbole à la raison sociale telle que l'AMF la
+    connaît. Le rattachement se fait sur ce nom, présent dans l'index : passer
+    par une résolution ISIN → ticker imposait une centaine d'interrogations
+    d'un service tiers pour chaque consultation, au prix de plusieurs minutes
+    d'attente.
 
     Les PDF ne sont ouverts que pour les avis retenus : chaque document est un
     appel réseau, et l'AMF n'est pas un service qu'on martèle.
     """
-    wanted = {s.upper() for s in symbols}
+    par_nom = {nom.strip().upper(): symbole.upper() for symbole, nom in entries if nom}
     since = dt.date.today() - dt.timedelta(days=days)
     rows = await _index(since)
     if not rows:
         return {"crossings": [], "covered": [], "scanned": 0, "since": since.isoformat()}
 
-    mapping = await _tickers_for([r.get("isin") for r in rows])
-    retained = []
+    retenus = []
+    couvertes: set[str] = set()
     for row in rows:
-        ticker = mapping.get(row.get("isin") or "")
-        if ticker and ticker.upper() in wanted:
-            retained.append({**row, "symbol": ticker.upper()})
+        nom = (row.get("societe") or "").strip().upper()
+        symbole = par_nom.get(nom)
+        if symbole:
+            couvertes.add(symbole)
+            retenus.append({**row, "symbol": symbole})
 
     semaphore = asyncio.Semaphore(4)
 
@@ -297,16 +280,14 @@ async def crossings(symbols: list[str], days: int = 120) -> dict:
             return await _detail(row)
 
     results = await asyncio.gather(
-        *(detail(r) for r in retained[:MAX_DOCUMENTS]), return_exceptions=True
+        *(detail(r) for r in retenus[:MAX_DOCUMENTS]), return_exceptions=True
     )
     kept = [r for r in results if isinstance(r, dict)]
     kept.sort(key=lambda r: (r.get("franchi_le") or r.get("publie_le") or ""), reverse=True)
 
     return {
         "crossings": kept,
-        # Valeurs effectivement couvertes par la source : elle ne concerne que
-        # les émetteurs cotés en France.
-        "covered": sorted({t.upper() for t in mapping.values()} & wanted),
+        "covered": sorted(couvertes),
         "scanned": len(rows),
         "since": since.isoformat(),
     }
