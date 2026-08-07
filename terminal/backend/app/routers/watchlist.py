@@ -14,9 +14,12 @@ router = APIRouter(prefix="/api/watchlists", tags=["watchlists"])
 
 _lock = Lock()
 
+#: Liste livrée par défaut, à titre d'amorce. Elle se modifie depuis l'écran
+#: Marché et n'a aucune valeur de recommandation : ce sont six grandes
+#: capitalisations éligibles au PEA, choisies pour que l'écran ne soit pas
+#: vide au premier lancement.
 DEFAULT_WATCHLISTS = {
     "PEA — Cœur": ["MC.PA", "AIR.PA", "SU.PA", "ASML.AS", "SAP.DE", "TTE.PA"],
-    "Dividendes": ["TTE.PA", "SAN.PA", "ENGI.PA", "ALV.DE", "ENI.MI", "IBE.MC"],
 }
 
 

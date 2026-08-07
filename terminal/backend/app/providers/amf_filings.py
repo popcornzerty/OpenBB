@@ -71,6 +71,15 @@ _SEUIL = re.compile(r"seuils?\s+de\s+(?P<seuil>\d{1,2}(?:[,.]\d+)?)\s*%", re.IGN
 _NATURE = re.compile(r"seuils?\s+de\s+[\d,.]+\s*%\s+(?P<nature>du\s+capital|des\s+droits\s+de\s+vote)", re.IGNORECASE)
 _DATE_FR = re.compile(r"franchi\w*\s+en\s+(?:hausse|baisse)\s*,?\s*le\s+(?P<jour>\d{1,2}\s+\w+\s+20\d\d)")
 
+#: Nombre d'actions **détenues** après franchissement — et non achetées. Un
+#: avis de seuil donne l'assiette atteinte, jamais le volume de la
+#: transaction : il n'existe donc pas de « prix d'achat » à en tirer.
+_ACTIONS = re.compile(
+    r"d[ée]ten(?:ir|ait|ait\s*:)[^.]{0,160}?([\d][\d\s  ]{3,})\s+actions",
+    re.IGNORECASE,
+)
+_PART = re.compile(r"soit\s+([\d,\.]+)\s*%\s+du\s+capital", re.IGNORECASE)
+
 _MOIS = {
     "janvier": 1, "février": 2, "fevrier": 2, "mars": 3, "avril": 4, "mai": 5,
     "juin": 6, "juillet": 7, "août": 8, "aout": 8, "septembre": 9,
@@ -134,9 +143,20 @@ def _declarant(texte: str) -> tuple[str | None, str]:
     return nom, nature
 
 
+def _entier(texte: str) -> int | None:
+    """Lit « 13 960 872 » en entier, espaces insécables comprises."""
+    net = re.sub(r"[\s  ]", "", texte or "")
+    try:
+        return int(net)
+    except ValueError:
+        return None
+
+
 def parse(texte: str) -> dict:
     """Extrait ce qui fait l'intérêt d'un avis de franchissement."""
     nom, nature = _declarant(texte)
+    actions = _ACTIONS.search(texte)
+    part = _PART.search(texte)
     sens = _SENS.search(texte)
     seuil = _SEUIL.search(texte)
     nature_seuil = _NATURE.search(texte)
@@ -154,6 +174,10 @@ def parse(texte: str) -> dict:
             else None
         ),
         "franchi_le": _iso_date(quand.group("jour")) if quand else None,
+        "actions": _entier(actions.group(1)) if actions else None,
+        "part_capital": (
+            float(part.group(1).replace(",", ".")) / 100 if part else None
+        ),
     }
 
 
@@ -237,7 +261,7 @@ async def _detail(row: dict) -> dict:
             return None
         return parse(texte)
 
-    key = f"amf:doc:v1:{row.get('id')}"
+    key = f"amf:doc:v2:{row.get('id')}"
     value, _, _ = await cache.resolve(key, TTL_DOCUMENT, produce)
     if value is None:
         # Certains avis sont des images sans couche texte : on les garde dans

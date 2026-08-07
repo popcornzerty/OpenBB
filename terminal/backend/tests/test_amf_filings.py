@@ -25,7 +25,10 @@ GOLDMAN = avis(
     "Par un courrier reçu le 29 juillet 2026, la société The Goldman Sachs "
     "Group, Inc (Corporation Trust Center, 1209 Orange Street, Wilmington, DE "
     "19801, USA) a déclaré avoir franchi en hausse, le 23 juillet 2026, "
-    "indirectement, le seuil de 5% des droits de vote de la société VALEO"
+    "indirectement, le seuil de 5% des droits de vote de la société VALEO, et "
+    "détenir, indirectement, à cette date, 13 960 872 actions VALEO "
+    "représentant autant de droits de vote, soit 5,68% du capital et 5,04% "
+    "des droits de vote de cette société"
 )
 
 
@@ -155,6 +158,39 @@ class TestStructureDeSortie:
         """Le rendu ne doit pas avoir à tester l'existence de chaque champ."""
         attendues = {
             "declarant", "declarant_nature", "sens", "seuil",
-            "seuil_nature", "franchi_le",
+            "seuil_nature", "franchi_le", "actions", "part_capital",
         }
         assert set(parse("")) == attendues
+
+
+class TestAssietteDetenue:
+    """Un avis de seuil dit ce qui est détenu, jamais ce qui a été acheté.
+
+    Le nombre d'actions et la part du capital sont donc l'assiette atteinte
+    après franchissement. En tirer un « prix d'achat » n'aurait aucun sens :
+    l'avis ne mentionne ni volume ni prix de transaction.
+    """
+
+    def test_nombre_d_actions(self):
+        assert parse(GOLDMAN)["actions"] == 13_960_872
+
+    def test_part_du_capital(self):
+        assert parse(GOLDMAN)["part_capital"] == pytest.approx(0.0568)
+
+    def test_espaces_insecables_dans_le_nombre(self):
+        texte = avis(
+            "Par courrier reçu le 1 juin 2026, la société X (Paris) a déclaré "
+            "avoir franchi en hausse, le 28 mai 2026, le seuil de 5% du capital "
+            "de la société Y, et détenir à cette date 1 234 567 actions Y, "
+            "soit 5,01% du capital"
+        )
+        assert parse(texte)["actions"] == 1_234_567
+
+    def test_assiette_absente(self):
+        texte = avis(
+            "Par courrier reçu le 1 juin 2026, la société X (Paris) a déclaré "
+            "avoir franchi en baisse, le 28 mai 2026, le seuil de 5% du capital"
+        )
+        resultat = parse(texte)
+        assert resultat["actions"] is None
+        assert resultat["part_capital"] is None

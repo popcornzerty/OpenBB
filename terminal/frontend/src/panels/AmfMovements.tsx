@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, type AmfMovements as Movements } from "../lib/api";
-import { compact, date, money, num } from "../lib/format";
+import { compact, date, money, num, price } from "../lib/format";
 
 type Source = "institutionnels" | "inities";
 
@@ -140,11 +140,14 @@ function Institutionnels({
           <tr>
             <th>Franchi le</th>
             <th>Titre</th>
+            <th>Nom</th>
             <th>Déclarant</th>
             <th>Nature</th>
             <th className="right">Seuil</th>
             <th>Sens</th>
-            <th>Publié le</th>
+            <th className="right">Actions détenues</th>
+            <th className="right">Cours du jour</th>
+            <th className="right">Valeur détenue</th>
             <th />
           </tr>
         </thead>
@@ -156,6 +159,9 @@ function Institutionnels({
                 <button className="link sym" onClick={() => onOpen(row.symbol)}>
                   {row.symbol}
                 </button>
+              </td>
+              <td className="truncate dim" style={{ maxWidth: 190 }} title={row.name ?? undefined}>
+                {row.name ?? <span className="faint">—</span>}
               </td>
               <td title={row.societe ?? undefined}>
                 {row.declarant ?? <span className="faint">non extrait</span>}
@@ -176,7 +182,19 @@ function Institutionnels({
               <td className={row.sens === "hausse" ? "up" : row.sens === "baisse" ? "down" : ""}>
                 {row.sens === "hausse" ? "▲ en hausse" : row.sens === "baisse" ? "▼ en baisse" : "—"}
               </td>
-              <td className="num faint">{date(row.publie_le)}</td>
+              <td className="right num">
+                {row.actions === null ? "—" : compact(row.actions)}
+                {row.part_capital !== null && (
+                  <span className="faint" style={{ fontSize: 11 }}>
+                    {" "}
+                    {(row.part_capital * 100).toFixed(2).replace(".", ",")} %
+                  </span>
+                )}
+              </td>
+              <td className="right num dim" title={`Clôture du ${date(row.franchi_le ?? row.publie_le)}`}>
+                {price(row.cours, "EUR")}
+              </td>
+              <td className="right num">{money(row.valeur_participation, "EUR")}</td>
               <td className="right">
                 {row.document && (
                   <a className="chip" href={row.document} target="_blank" rel="noreferrer">
@@ -210,12 +228,15 @@ function Inities({ data, onOpen }: { data: Movements; onOpen: (symbol: string) =
           <tr>
             <th>Opéré le</th>
             <th>Titre</th>
+            <th>Nom</th>
             <th>Déclarant</th>
             <th>Fonction</th>
             <th>Sens</th>
             <th>Nature</th>
             <th className="right">Volume</th>
-            <th className="right">Prix</th>
+            <th className="right" title="Prix effectivement pratiqué, déclaré par l'intéressé">
+              Prix payé
+            </th>
             <th className="right">Montant</th>
             <th />
           </tr>
@@ -228,6 +249,9 @@ function Inities({ data, onOpen }: { data: Movements; onOpen: (symbol: string) =
                 <button className="link sym" onClick={() => onOpen(row.symbol)}>
                   {row.symbol}
                 </button>
+              </td>
+              <td className="truncate dim" style={{ maxWidth: 190 }} title={row.name ?? undefined}>
+                {row.name ?? <span className="faint">—</span>}
               </td>
               <td title={row.emetteur ?? undefined}>
                 {row.declarant ?? <span className="faint">non extrait</span>}
@@ -276,6 +300,15 @@ function Perimetre({ data }: { data: Movements }) {
         {data.in_scope.length > 0 && (
           <> Suivies : {data.in_scope.join(", ")}.</>
         )}
+      </div>
+
+      <div className="note">
+        <strong>Deux natures de prix.</strong> Chez les initiés, le prix est celui
+        réellement pratiqué : il figure dans la déclaration. Chez les institutionnels, il
+        n'y en a pas — un avis de franchissement indique l'assiette atteinte, jamais le
+        volume ni le prix de la transaction. La colonne « cours du jour » est donc la
+        clôture du jour de franchissement, calculée par le terminal, et la « valeur
+        détenue » en découle : c'est ce que pèse la participation, pas ce qu'elle a coûté.
       </div>
 
       <div className="note">

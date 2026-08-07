@@ -262,6 +262,8 @@ export interface MultipleHistory {
 export interface AmfCrossing {
   id: string;
   symbol: string;
+  /** Dénomination de l'univers, absente hors univers plutôt que devinée. */
+  name: string | null;
   societe: string | null;
   publie_le: string;
   document: string | null;
@@ -272,6 +274,12 @@ export interface AmfCrossing {
   seuil: number | null;
   seuil_nature: string | null;
   franchi_le: string | null;
+  /** Actions **détenues** après franchissement, pas achetées. */
+  actions: number | null;
+  part_capital: number | null;
+  /** Clôture du jour de franchissement : référence calculée, pas un prix payé. */
+  cours: number | null;
+  valeur_participation: number | null;
   lisible: boolean;
 }
 
@@ -280,6 +288,7 @@ export interface AmfInsider {
   id: number;
   numero: string | null;
   symbol: string;
+  name: string | null;
   societe: string | null;
   publie_le: string;
   document: string | null;

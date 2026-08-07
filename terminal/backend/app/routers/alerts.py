@@ -21,7 +21,7 @@ from fastapi import APIRouter, HTTPException, Query
 
 from ..pea import registry
 from ..portfolio import store
-from ..providers import amf_filings, amf_insiders, us_managers
+from ..providers import amf_filings, amf_insiders, obb_source, us_managers
 
 router = APIRouter(prefix="/api/alerts", tags=["alertes"])
 
@@ -66,6 +66,55 @@ async def _symbols_for(scope: str, name: str) -> list[str]:
     raise HTTPException(422, "Portée inconnue : attendu « portefeuille » ou « liste ».")
 
 
+
+async def _closes(symbols: set[str], since: str) -> dict[str, dict[str, float]]:
+    """Cours de clôture par valeur et par jour, depuis ``since``.
+
+    Un avis de franchissement ne porte aucun prix : il indique une assiette
+    atteinte, pas une transaction. Le cours du jour de franchissement est donc
+    la seule référence de marché rattachable — calculée, jamais présentée
+    comme un prix payé.
+    """
+    if not symbols or not since:
+        return {}
+
+    async def one(symbol: str) -> tuple[str, dict[str, float]]:
+        try:
+            rows = await obb_source.historical(symbol, start_date=since)
+        except Exception:  # noqa: BLE001
+            return symbol, {}
+        serie = {}
+        for row in rows:
+            jour = str(row.get("date"))[:10]
+            close = row.get("close")
+            if jour and close is not None:
+                serie[jour] = float(close)
+        return symbol, serie
+
+    pairs = await asyncio.gather(*(one(s) for s in symbols), return_exceptions=True)
+    return {s: v for pair in pairs if isinstance(pair, tuple) for s, v in [pair]}
+
+
+def _cours_du_jour(serie: dict[str, float], jour: str | None) -> float | None:
+    """Clôture de ce jour, ou du dernier jour coté qui le précède."""
+    if not serie or not jour:
+        return None
+    if jour in serie:
+        return serie[jour]
+    anterieurs = [d for d in serie if d <= jour]
+    return serie[max(anterieurs)] if anterieurs else None
+
+
+def _nom_complet(symbol: str) -> str | None:
+    """Dénomination de l'univers, seule source dont le nom soit vérifié.
+
+    Hors univers — un ETF, une valeur ajoutée à la main — on préfère ne rien
+    afficher qu'un nom deviné à partir de la raison sociale de l'avis.
+    """
+    entry = registry.get(symbol)
+    return entry.name if entry and entry.name else None
+
+
 @router.get("/amf")
 async def amf_movements(
     scope: str = Query("portefeuille", description="portefeuille ou liste"),
@@ -98,6 +147,26 @@ async def amf_movements(
         else insiders
     )
 
+    lignes_c = crossings.get("crossings", [])
+    lignes_i = insiders.get("insiders", [])
+    depuis = crossings.get("since") or insiders.get("since")
+
+    # Le cours du jour n'a d'intérêt que pour les franchissements : les
+    # déclarations de dirigeants portent déjà le prix réellement pratiqué.
+    series = await _closes({r["symbol"] for r in lignes_c if r.get("franchi_le")}, depuis)
+    for row in lignes_c:
+        cours = _cours_du_jour(series.get(row["symbol"], {}), row.get("franchi_le"))
+        row["cours"] = round(cours, 4) if cours is not None else None
+        actions = row.get("actions")
+        # Valeur de la participation atteinte, pas montant d'un achat.
+        row["valeur_participation"] = (
+            round(actions * cours, 2) if actions and cours is not None else None
+        )
+        row["name"] = _nom_complet(row["symbol"])
+
+    for row in lignes_i:
+        row["name"] = _nom_complet(row["symbol"])
+
     return {
         "scope": scope,
         "name": name,
@@ -106,10 +175,10 @@ async def amf_movements(
         # Ce que la source peut couvrir, indépendamment de ce qu'elle a trouvé.
         "in_scope": sorted(set(s.upper() for s in francais)),
         "out_of_scope": sorted(set(s.upper() for s in symbols) - set(s.upper() for s in francais)),
-        "crossings": crossings.get("crossings", []),
+        "crossings": lignes_c,
         "crossings_scanned": crossings.get("scanned", 0),
-        "insiders": insiders.get("insiders", []),
-        "since": crossings.get("since") or insiders.get("since"),
+        "insiders": lignes_i,
+        "since": depuis,
     }
 
 
