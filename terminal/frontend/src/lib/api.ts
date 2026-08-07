@@ -308,6 +308,15 @@ export interface AmfInsider {
   lisible: boolean;
 }
 
+export interface SymbolInsiders {
+  symbol: string;
+  name: string | null;
+  /** Faux hors périmètre AMF : l'absence de ligne n'est alors pas une information. */
+  in_scope: boolean;
+  insiders: AmfInsider[];
+  since: string;
+}
+
 export interface AmfMovements {
   scope: string;
   name: string;
@@ -716,6 +725,10 @@ export const api = {
   /** Gérants américains les plus présents sur ces valeurs européennes. */
   managers: (scope: "portefeuille" | "liste", name = "", top = 4) =>
     get<Managers>("/alerts/managers", { scope, name, top }),
+
+  /** Déclarations de dirigeants pour une seule valeur. */
+  symbolInsiders: (symbol: string, days = 365) =>
+    get<SymbolInsiders>(`/alerts/insiders/${encodeURIComponent(symbol)}`, { days }),
 
   /** Crée ou remplace une liste de suivi. */
   saveWatchlist: (name: string, symbols: string[]) =>

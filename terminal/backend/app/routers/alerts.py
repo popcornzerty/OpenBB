@@ -197,3 +197,41 @@ async def american_managers(
     symbols = await _symbols_for(scope, name)
     result = await us_managers.managers(symbols, top=top)
     return {"scope": scope, "name": name, **result}
+
+
+@router.get("/insiders/{symbol}")
+async def insiders_for(
+    symbol: str,
+    days: int = Query(365, ge=30, le=1095),
+) -> dict:
+    """Déclarations de dirigeants pour une seule valeur.
+
+    Sur une fiche société, la fenêtre est plus large que dans l'écran de
+    veille : on ne cherche pas ce qui vient de bouger, mais ce que les
+    dirigeants ont fait ces derniers mois.
+    """
+    cible = symbol.upper()
+    if not cible.endswith(FRENCH_SUFFIXES):
+        # Hors champ de l'AMF : le dire, plutôt que rendre une liste vide qui
+        # se lirait comme une absence de mouvement.
+        return {
+            "symbol": cible,
+            "name": _nom_complet(cible),
+            "in_scope": False,
+            "insiders": [],
+            "since": "",
+        }
+
+    entry = registry.get(cible)
+    nom = _raison_sociale(entry.name) if entry and entry.name else cible.split(".")[0]
+    result = await amf_insiders.insiders([(cible, nom)], days=days)
+    lignes = result.get("insiders", [])
+    for row in lignes:
+        row["name"] = _nom_complet(cible)
+    return {
+        "symbol": cible,
+        "name": _nom_complet(cible),
+        "in_scope": True,
+        "insiders": lignes,
+        "since": result.get("since", ""),
+    }

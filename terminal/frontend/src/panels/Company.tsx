@@ -1,8 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
-import { api, type Candle, type Company as CompanyData } from "../lib/api";
+import {
+  api,
+  type Candle,
+  type Company as CompanyData,
+  type SymbolInsiders,
+} from "../lib/api";
 import { Chart, type ChartSeries } from "../components/Chart";
 import { PeaBadge } from "../components/PeaBadge";
-import { changeClass, compact, date, num, pct, price } from "../lib/format";
+import { changeClass, compact, date, money, num, pct, price } from "../lib/format";
 
 const RANGES = [
   { label: "1 M", days: 30 },
@@ -11,7 +16,7 @@ const RANGES = [
   { label: "5 A", days: 1826 },
 ];
 
-type Tab = "fondamentaux" | "dividendes" | "actualites";
+type Tab = "fondamentaux" | "dividendes" | "inities" | "actualites";
 
 function isoDaysAgo(days: number): string {
   const when = new Date();
@@ -30,6 +35,7 @@ export function Company({ symbol }: { symbol: string }) {
   const [fundamentals, setFundamentals] = useState<Awaited<ReturnType<typeof api.fundamentals>> | null>(null);
   const [dividends, setDividends] = useState<{ ex_dividend_date: string; amount: number }[]>([]);
   const [news, setNews] = useState<Record<string, string>[]>([]);
+  const [insiders, setInsiders] = useState<SymbolInsiders | null>(null);
 
   useEffect(() => {
     setData(null);
@@ -48,10 +54,13 @@ export function Company({ symbol }: { symbol: string }) {
     setFundamentals(null);
     setDividends([]);
     setNews([]);
+    setInsiders(null);
     if (tab === "fondamentaux") {
       api.fundamentals(symbol).then(setFundamentals).catch(() => setFundamentals(null));
     } else if (tab === "dividendes") {
       api.dividends(symbol).then((r) => setDividends(r.rows)).catch(() => setDividends([]));
+    } else if (tab === "inities") {
+      api.symbolInsiders(symbol).then(setInsiders).catch(() => setInsiders(null));
     } else {
       api.news(symbol).then((r) => setNews(r.rows)).catch(() => setNews([]));
     }
@@ -163,6 +172,9 @@ export function Company({ symbol }: { symbol: string }) {
           <button className={tab === "dividendes" ? "active" : ""} onClick={() => setTab("dividendes")}>
             Dividendes
           </button>
+          <button className={tab === "inities" ? "active" : ""} onClick={() => setTab("inities")}>
+            Mouvements d'initiés
+          </button>
           <button className={tab === "actualites" ? "active" : ""} onClick={() => setTab("actualites")}>
             Actualités
           </button>
@@ -242,6 +254,8 @@ export function Company({ symbol }: { symbol: string }) {
             </table>
           </div>
         )}
+
+        {tab === "inities" && <Inities data={insiders} symbol={symbol} />}
 
         {tab === "actualites" && (
           <div className="panel-body">
@@ -327,6 +341,117 @@ function StatementTable({
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+
+/** Déclarations de dirigeants sur cette valeur.
+ *
+ *  Publiées par l'AMF sous trois jours ouvrés, elles disent ce que ceux qui
+ *  connaissent le mieux la société font de leurs propres titres. */
+function Inities({ data, symbol }: { data: SymbolInsiders | null; symbol: string }) {
+  if (data === null) {
+    return <div className="spinner">Lecture des déclarations de l'AMF…</div>;
+  }
+
+  if (!data.in_scope) {
+    return (
+      <div className="callout">
+        {symbol} n'est pas cotée en France : l'AMF ne publie donc aucune déclaration de
+        dirigeant la concernant. L'absence de ligne ici ne signifie pas qu'il ne s'y
+        passe rien.
+      </div>
+    );
+  }
+
+  if (data.insiders.length === 0) {
+    return (
+      <div className="callout">
+        Aucune déclaration de dirigeant sur {symbol} depuis le {date(data.since)}.
+      </div>
+    );
+  }
+
+  const achats = data.insiders.filter((r) => r.sens === "achat");
+  const ventes = data.insiders.filter((r) => r.sens === "vente");
+  const solde =
+    achats.reduce((t, r) => t + (r.montant ?? 0), 0) -
+    ventes.reduce((t, r) => t + (r.montant ?? 0), 0);
+
+  return (
+    <div className="stack">
+      <div className="kpis">
+        <div className="kpi">
+          <div className="label">Déclarations</div>
+          <div className="value">{data.insiders.length}</div>
+        </div>
+        <div className="kpi">
+          <div className="label">Achats</div>
+          <div className="value up">{achats.length}</div>
+        </div>
+        <div className="kpi">
+          <div className="label">Ventes</div>
+          <div className="value down">{ventes.length}</div>
+        </div>
+        <div className="kpi">
+          <div className="label">Solde net</div>
+          {/* Un solde vendeur n'est pas un signal en soi : les dirigeants
+              vendent aussi pour des raisons personnelles ou fiscales. */}
+          <div className={`value ${changeClass(solde)}`}>{money(solde, "EUR")}</div>
+        </div>
+      </div>
+
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Opéré le</th>
+              <th>Déclarant</th>
+              <th>Fonction</th>
+              <th>Sens</th>
+              <th>Nature</th>
+              <th className="right">Volume</th>
+              <th className="right">Prix payé</th>
+              <th className="right">Montant</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {data.insiders.map((row) => (
+              <tr key={row.id}>
+                <td className="num">{date(row.transaction_le ?? row.publie_le)}</td>
+                <td>{row.declarant ?? <span className="faint">non extrait</span>}</td>
+                <td className="faint truncate" style={{ maxWidth: 220 }} title={row.fonction ?? undefined}>
+                  {row.fonction ?? "—"}
+                </td>
+                <td className={row.sens === "achat" ? "up" : row.sens === "vente" ? "down" : ""}>
+                  {row.sens === "achat" ? "▲ achat" : row.sens === "vente" ? "▼ vente" : "—"}
+                </td>
+                <td className="faint">{row.nature ?? "—"}</td>
+                <td className="right num">{row.volume === null ? "—" : compact(row.volume)}</td>
+                <td className="right num dim">{row.prix === null ? "—" : num(row.prix)}</td>
+                <td className="right num">{money(row.montant, "EUR")}</td>
+                <td className="right">
+                  {row.document && (
+                    <a className="chip" href={row.document} target="_blank" rel="noreferrer">
+                      Avis
+                    </a>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="note">
+        Déclarations publiées par l'AMF au titre de l'article L. 621-18-2, sous trois
+        jours ouvrés. Le sens est déduit de la nature déclarée, qui reste affichée :
+        souscrire à un plan d'épargne salariale ou recevoir des actions gratuites n'est
+        pas acheter en bourse. Un solde vendeur ne constitue pas un signal en soi — les
+        dirigeants cèdent aussi pour financer un impôt ou diversifier leur patrimoine.
+      </div>
     </div>
   );
 }
