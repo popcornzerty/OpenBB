@@ -601,3 +601,123 @@ th.right {
   color: var(--text);
   border-bottom-color: var(--accent);
 }
+
+/* ---------------------------------------------------------------- Glossaire
+
+   Les renvois ⓘ doivent se voir sans encombrer : ils accompagnent un
+   intitulé, ils ne le remplacent pas. D'où une icône discrète, qui ne
+   s'affirme qu'au survol. */
+
+.glossaire-renvoi {
+  position: relative;
+  display: inline-flex;
+  margin-left: 4px;
+  vertical-align: baseline;
+}
+
+.glossaire-icone {
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  color: var(--text-faint);
+  font-size: 11px;
+  line-height: 1;
+}
+
+.glossaire-icone:hover {
+  color: var(--accent, #5aa9ff);
+}
+
+.glossaire-bulle {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 40;
+  width: 20rem;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 9px 11px;
+  background: var(--panel, #161b22);
+  border: 1px solid var(--border, #30363d);
+  border-radius: 6px;
+  box-shadow: 0 8px 22px rgb(0 0 0 / 45%);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--text-dim);
+  white-space: normal;
+  text-align: left;
+}
+
+.glossaire-bulle strong { color: var(--text); }
+.glossaire-bulle code {
+  background: var(--bg, #0e1116);
+  padding: 2px 5px;
+  border-radius: 4px;
+  font-size: 11px;
+}
+.glossaire-bulle em {
+  color: var(--amber, #d29922);
+  font-style: normal;
+}
+
+.glossaire-fiche {
+  border: 1px solid var(--border, #30363d);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.glossaire-entete {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 11px;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  text-align: left;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.glossaire-entete:hover { background: var(--panel-hover, #1c2128); }
+.glossaire-entete.ouverte { background: var(--panel-hover, #1c2128); }
+.glossaire-chevron { color: var(--text-faint); width: 10px; }
+.glossaire-terme { font-weight: 600; }
+.glossaire-alias { font-size: 11px; }
+
+.glossaire-corps {
+  padding: 2px 11px 11px 29px;
+  border-top: 1px solid var(--border, #30363d);
+}
+
+.glossaire-corps p { margin: 9px 0 0; font-size: 13px; line-height: 1.6; }
+
+.glossaire-formule {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.glossaire-formule code {
+  background: var(--bg, #0e1116);
+  padding: 3px 7px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+/* La mise en garde est le seul élément coloré : c'est ce qu'on lit une fois
+   la définition comprise. */
+.glossaire-garde {
+  border-left: 2px solid var(--amber, #d29922);
+  padding-left: 9px;
+  color: var(--amber, #d29922);
+  font-size: 12px;
+}

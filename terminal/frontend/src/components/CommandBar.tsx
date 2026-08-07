@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api, type SearchResult } from "../lib/api";
+import { type GlossaryEntry, searchGlossary } from "../data/glossary";
 import { PeaBadge } from "./PeaBadge";
 
 /** Palette de recherche, ouverte au clavier.
@@ -11,10 +12,13 @@ export function CommandBar({
   open,
   onClose,
   onPick,
+  onGlossary,
 }: {
   open: boolean;
   onClose: () => void;
   onPick: (symbol: string) => void;
+  /** Ouvre une fiche du glossaire. Absent, seuls les titres sont proposés. */
+  onGlossary?: (id: string) => void;
 }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -59,6 +63,16 @@ export function CommandBar({
     return () => clearTimeout(timer);
   }, [query, open]);
 
+  // Le glossaire vit en mémoire : il répond à la frappe, sans attendre le
+  // réseau. Ses résultats précèdent donc toujours ceux des titres.
+  const termes = useMemo<GlossaryEntry[]>(() => {
+    const terme = query.trim();
+    if (!onGlossary || terme.length < 2) return [];
+    return searchGlossary(terme).slice(0, 4);
+  }, [query, onGlossary]);
+
+  const total = termes.length + results.length;
+
   if (!open) return null;
 
   const choose = (symbol: string) => {
@@ -66,17 +80,28 @@ export function CommandBar({
     onClose();
   };
 
+  const chooseTerme = (id: string) => {
+    onGlossary?.(id);
+    onClose();
+  };
+
+  /** Élément désigné par le curseur, glossaire d'abord puis titres. */
+  const activer = (index: number) => {
+    if (index < termes.length) chooseTerme(termes[index].id);
+    else results[index - termes.length] && choose(results[index - termes.length].symbol);
+  };
+
   const onKeyDown = (event: React.KeyboardEvent) => {
     if (event.key === "Escape") {
       onClose();
     } else if (event.key === "ArrowDown") {
       event.preventDefault();
-      setCursor((c) => Math.min(c + 1, results.length - 1));
+      setCursor((c) => Math.min(c + 1, total - 1));
     } else if (event.key === "ArrowUp") {
       event.preventDefault();
       setCursor((c) => Math.max(c - 1, 0));
-    } else if (event.key === "Enter" && results[cursor]) {
-      choose(results[cursor].symbol);
+    } else if (event.key === "Enter" && total > 0) {
+      activer(cursor);
     }
   };
 
@@ -88,7 +113,11 @@ export function CommandBar({
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           onKeyDown={onKeyDown}
-          placeholder="Nom, ticker ou ISIN — ex. LVMH, MC.PA, FR0000121014"
+          placeholder={
+            onGlossary
+              ? "Titre ou terme — LVMH, FR0000121014, PER, P/B…"
+              : "Nom, ticker ou ISIN — ex. LVMH, MC.PA, FR0000121014"
+          }
           aria-label="Recherche de titre"
         />
         <div className="command-results">
@@ -96,19 +125,33 @@ export function CommandBar({
           {!error && busy && results.length === 0 && (
             <div className="command-empty">Recherche…</div>
           )}
-          {!error && !busy && query.trim().length >= 2 && results.length === 0 && (
+          {!error && !busy && query.trim().length >= 2 && total === 0 && (
             <div className="command-empty">Aucun résultat pour « {query.trim()} »</div>
           )}
+          {termes.map((entry, index) => (
+            <button
+              key={`glossaire-${entry.id}`}
+              className={`command-item ${index === cursor ? "active" : ""}`}
+              onMouseEnter={() => setCursor(index)}
+              onClick={() => chooseTerme(entry.id)}
+            >
+              <span className="badge plain">Glossaire</span>
+              <span className="name">{entry.term}</span>
+              <span className="faint">{(entry.aliases ?? []).join(" · ")}</span>
+            </button>
+          ))}
           {query.trim().length < 2 && (
             <div className="command-empty">
-              Saisissez au moins deux caractères. Un ISIN est résolu automatiquement.
+              Saisissez au moins deux caractères. Un ISIN est résolu
+              automatiquement, et les termes du glossaire sont cherchés par leur
+              nom comme par leur sigle.
             </div>
           )}
           {results.map((item, index) => (
             <button
               key={item.symbol}
-              className={`command-item ${index === cursor ? "active" : ""}`}
-              onMouseEnter={() => setCursor(index)}
+              className={`command-item ${index + termes.length === cursor ? "active" : ""}`}
+              onMouseEnter={() => setCursor(index + termes.length)}
               onClick={() => choose(item.symbol)}
             >
               <span className="sym">{item.symbol}</span>

@@ -2,12 +2,19 @@ import { useCallback, useEffect, useState } from "react";
 import { CommandBar } from "./components/CommandBar";
 import { IndicesStrip } from "./components/IndicesStrip";
 import { Company } from "./panels/Company";
+import { Glossary } from "./panels/Glossary";
 import { Portfolio } from "./panels/Portfolio";
 import { Screener } from "./panels/Screener";
 import { Valuation } from "./panels/Valuation";
 import { Market } from "./panels/Market";
 
-type View = "marche" | "portefeuille" | "screener" | "societe" | "valorisation";
+type View =
+  | "marche"
+  | "portefeuille"
+  | "screener"
+  | "societe"
+  | "valorisation"
+  | "glossaire";
 
 const VIEWS: { id: View; label: string; key: string }[] = [
   { id: "marche", label: "Marché", key: "1" },
@@ -15,16 +22,29 @@ const VIEWS: { id: View; label: string; key: string }[] = [
   { id: "screener", label: "Screener PEA", key: "3" },
   { id: "societe", label: "Société", key: "4" },
   { id: "valorisation", label: "Valorisation", key: "5" },
+  { id: "glossaire", label: "Glossaire", key: "6" },
 ];
 
 export default function App() {
   const [view, setView] = useState<View>("marche");
   const [symbol, setSymbol] = useState("MC.PA");
   const [commandOpen, setCommandOpen] = useState(false);
+  // Fiche du glossaire à ouvrir, quand on y arrive depuis un renvoi
+  // contextuel. Un compteur accompagne l'identifiant : cliquer deux fois sur
+  // le même renvoi doit ramener la fiche à l'écran, or une valeur inchangée
+  // ne déclencherait aucun effet.
+  const [glossaryFocus, setGlossaryFocus] = useState<{ id: string; n: number } | null>(
+    null,
+  );
 
   const openSymbol = useCallback((next: string) => {
     setSymbol(next);
     setView("societe");
+  }, []);
+
+  const openGlossary = useCallback((id: string) => {
+    setGlossaryFocus((current) => ({ id, n: (current?.n ?? 0) + 1 }));
+    setView("glossaire");
   }, []);
 
   useEffect(() => {
@@ -83,7 +103,7 @@ export default function App() {
         )}
 
         <span className="header-hint">
-          <kbd>Ctrl</kbd> <kbd>K</kbd> rechercher · <kbd>1</kbd>–<kbd>5</kbd> écrans
+          <kbd>Ctrl</kbd> <kbd>K</kbd> rechercher · <kbd>1</kbd>–<kbd>6</kbd> écrans
         </span>
       </header>
 
@@ -92,15 +112,21 @@ export default function App() {
       <main className="main">
         {view === "marche" && <Market onOpen={openSymbol} />}
         {view === "portefeuille" && <Portfolio onOpen={openSymbol} />}
-        {view === "screener" && <Screener onOpen={openSymbol} />}
-        {view === "societe" && <Company symbol={symbol} />}
-        {view === "valorisation" && <Valuation symbol={symbol} />}
+        {view === "screener" && (
+          <Screener onOpen={openSymbol} onGlossary={openGlossary} />
+        )}
+        {view === "societe" && <Company symbol={symbol} onGlossary={openGlossary} />}
+        {view === "valorisation" && (
+          <Valuation symbol={symbol} onGlossary={openGlossary} />
+        )}
+        {view === "glossaire" && <Glossary focus={glossaryFocus} />}
       </main>
 
       <CommandBar
         open={commandOpen}
         onClose={() => setCommandOpen(false)}
         onPick={openSymbol}
+        onGlossary={openGlossary}
       />
     </div>
   );

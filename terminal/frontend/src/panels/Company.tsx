@@ -5,6 +5,7 @@ import {
   type Company as CompanyData,
   type SymbolInsiders,
 } from "../lib/api";
+import { GlossaryHint } from "../components/GlossaryHint";
 import { Chart, type ChartSeries } from "../components/Chart";
 import { PeaBadge } from "../components/PeaBadge";
 import { changeClass, compact, date, money, num, pct, price } from "../lib/format";
@@ -25,7 +26,13 @@ function isoDaysAgo(days: number): string {
 }
 
 /** Fiche société : identité, verdict PEA, chiffres clés, cours et comptes. */
-export function Company({ symbol }: { symbol: string }) {
+export function Company({
+  symbol,
+  onGlossary,
+}: {
+  symbol: string;
+  onGlossary?: (id: string) => void;
+}) {
   const [data, setData] = useState<CompanyData | null>(null);
   const [candles, setCandles] = useState<Candle[]>([]);
   const [range, setRange] = useState(365);
@@ -149,15 +156,15 @@ export function Company({ symbol }: { symbol: string }) {
         <div className="panel-body">
           <div className="kpis">
             <Kpi label="Capitalisation" value={compact(metrics.market_cap as number, currency ?? "")} />
-            <Kpi label="PER" value={num(metrics.pe_ratio as number)} />
+            <Kpi label="PER" value={num(metrics.pe_ratio as number)} glossaire="per" onGlossary={onGlossary} />
             <Kpi label="PER estimé" value={num(metrics.forward_pe as number)} />
             <Kpi label="Cours / actif net" value={num(metrics.price_to_book as number)} />
             <Kpi label="Rendement" value={pct(metrics.dividend_yield as number)} />
-            <Kpi label="ROE" value={pct(metrics.return_on_equity as number)} />
-            <Kpi label="Marge nette" value={pct(metrics.profit_margin as number)} />
-            <Kpi label="Marge opér." value={pct(metrics.operating_margin as number)} />
-            <Kpi label="Dette / fonds propres" value={num(metrics.debt_to_equity as number)} />
-            <Kpi label="Bêta" value={num(metrics.beta as number)} />
+            <Kpi label="ROE" value={pct(metrics.return_on_equity as number)} glossaire="roe" onGlossary={onGlossary} />
+            <Kpi label="Marge nette" value={pct(metrics.profit_margin as number)} glossaire="marge-nette" onGlossary={onGlossary} />
+            <Kpi label="Marge opér." value={pct(metrics.operating_margin as number)} glossaire="marge-operationnelle" onGlossary={onGlossary} />
+            <Kpi label="Dette / fonds propres" value={num(metrics.debt_to_equity as number)} glossaire="dette-fonds-propres" onGlossary={onGlossary} />
+            <Kpi label="Bêta" value={num(metrics.beta as number)} glossaire="beta" onGlossary={onGlossary} />
             <Kpi label="Croissance CA" value={pct(metrics.revenue_growth as number)} />
             <Kpi label="Salariés" value={compact(profile.employees as number)} />
           </div>
@@ -286,10 +293,24 @@ export function Company({ symbol }: { symbol: string }) {
   );
 }
 
-function Kpi({ label, value }: { label: string; value: string }) {
+function Kpi({
+  label,
+  value,
+  glossaire,
+  onGlossary,
+}: {
+  label: string;
+  value: string;
+  /** Fiche du glossaire décrivant cet indicateur, s'il en a une. */
+  glossaire?: string;
+  onGlossary?: (id: string) => void;
+}) {
   return (
     <div className="kpi">
-      <div className="label">{label}</div>
+      <div className="label">
+        {label}
+        {glossaire && <GlossaryHint id={glossaire} onOpen={onGlossary} />}
+      </div>
       <div className="value">{value}</div>
     </div>
   );

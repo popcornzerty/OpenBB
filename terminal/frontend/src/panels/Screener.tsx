@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { GlossaryHint } from "../components/GlossaryHint";
 import { api, type ScreenerRow } from "../lib/api";
 import { changeClass, compact, date, pct } from "../lib/format";
 import { DividendBadge } from "../components/DividendBadge";
@@ -22,7 +23,13 @@ const CAP_STEPS = [
 ];
 
 /** Screener sur l'univers européen, filtre PEA actif par défaut. */
-export function Screener({ onOpen }: { onOpen: (symbol: string) => void }) {
+export function Screener({
+  onOpen,
+  onGlossary,
+}: {
+  onOpen: (symbol: string) => void;
+  onGlossary?: (id: string) => void;
+}) {
   const [tab, setTab] = useState<Tab>("filtres");
   const [filters, setFilters] = useState<Filters | null>(null);
   const [rows, setRows] = useState<ScreenerRow[]>([]);
@@ -194,9 +201,11 @@ export function Screener({ onOpen }: { onOpen: (symbol: string) => void }) {
                 </th>
                 <th className="right sortable" onClick={() => toggleSort("dividend_yield")}>
                   Rendement{arrow("dividend_yield")}
+                  <GlossaryHint id="rendement" onOpen={onGlossary} />
                 </th>
                 <th className="sortable" onClick={() => toggleSort("dividend_safety")}>
                   Sûreté{arrow("dividend_safety")}
+                  <GlossaryHint id="surete-dividende" onOpen={onGlossary} />
                 </th>
                 <th className="sortable" onClick={() => toggleSort("next_ex_date")}>
                   Prochain détach.{arrow("next_ex_date")}
@@ -204,6 +213,7 @@ export function Screener({ onOpen }: { onOpen: (symbol: string) => void }) {
                 <th className="sortable" onClick={() => toggleSort("index")}>Indice{arrow("index")}</th>
                 <th className="right sortable" onClick={() => toggleSort("market_cap_eur")}>
                   Capitalisation{arrow("market_cap_eur")}
+                  <GlossaryHint id="capitalisation" onOpen={onGlossary} />
                 </th>
               </tr>
             </thead>

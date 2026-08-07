@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, type Valuation as ValuationData } from "../lib/api";
+import { GlossaryHint } from "../components/GlossaryHint";
 import { Chart, type ChartSeries } from "../components/Chart";
 import { DividendBadge } from "../components/DividendBadge";
 import { FinancialTable } from "../components/FinancialTable";
@@ -18,7 +19,13 @@ const VERDICT_COLOR: Record<string, string> = {
  *  Tout ce qui fabrique le chiffre est exposé : multiples médians, poids,
  *  composantes écartées et pourquoi, niveau de confiance. Un modèle de
  *  valorisation dont on ne peut pas inspecter les ressorts ne vaut rien. */
-export function Valuation({ symbol }: { symbol: string }) {
+export function Valuation({
+  symbol,
+  onGlossary,
+}: {
+  symbol: string;
+  onGlossary?: (id: string) => void;
+}) {
   const [data, setData] = useState<ValuationData | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -86,8 +93,14 @@ export function Valuation({ symbol }: { symbol: string }) {
         <div className="panel-head">
           <span className="panel-title">Juste valeur — {data.name}</span>
           <span className="spacer" style={{ flex: 1 }} />
-          <span className="badge plain">Fenêtre {data.window_years} ans</span>
-          <span className="badge plain">Confiance {data.confidence.level}</span>
+          <span className="badge plain">
+            Fenêtre {data.window_years} ans
+            <GlossaryHint id="fenetre-calcul" onOpen={onGlossary} />
+          </span>
+          <span className="badge plain">
+            Confiance {data.confidence.level}
+            <GlossaryHint id="confiance-faible" onOpen={onGlossary} />
+          </span>
         </div>
 
         <div className="panel-body">
@@ -97,13 +110,19 @@ export function Valuation({ symbol }: { symbol: string }) {
               <div className="value">{price(data.last_price, data.currency)}</div>
             </div>
             <div className="kpi">
-              <div className="label">Juste valeur estimée</div>
+              <div className="label">
+                Juste valeur estimée
+                <GlossaryHint id="juste-valeur" onOpen={onGlossary} />
+              </div>
               <div className="value" style={{ color: "var(--amber)" }}>
                 {price(data.fair_value, data.currency)}
               </div>
             </div>
             <div className="kpi">
-              <div className="label">Écart</div>
+              <div className="label">
+                Écart
+                <GlossaryHint id="prime-decote" onOpen={onGlossary} />
+              </div>
               <div
                 className="value"
                 style={{ color: data.gap !== null && data.gap < 0 ? "var(--up)" : "var(--down)" }}
@@ -118,11 +137,17 @@ export function Valuation({ symbol }: { symbol: string }) {
               </div>
             </div>
             <div className="kpi">
-              <div className="label">Note qualité</div>
+              <div className="label">
+                Note qualité
+                <GlossaryHint id="note-qualite" onOpen={onGlossary} />
+              </div>
               <div className="value">{q ? num(q.score, 1) : "—"}</div>
             </div>
             <div className="kpi">
-              <div className="label">Prime / décote</div>
+              <div className="label">
+                Prime / décote
+                <GlossaryHint id="prime-decote" onOpen={onGlossary} />
+              </div>
               <div className="value">{pct(data.quality_factor - 1)}</div>
             </div>
           </div>
@@ -226,6 +251,7 @@ export function Valuation({ symbol }: { symbol: string }) {
             <div className="panel">
               <div className="panel-head">
                 <span className="panel-title">Objectif de cours du consensus</span>
+                <GlossaryHint id="consensus" onOpen={onGlossary} />
               </div>
               <div className="panel-body">
                 <div className="kpis">
