@@ -609,4 +609,18 @@ export const api = {
   valuation: (symbol: string) => get<Valuation>(`/valuation/${encodeURIComponent(symbol)}`),
 
   watchlists: () => get<{ watchlists: Record<string, string[]> }>("/watchlists"),
+
+  /** Crée ou remplace une liste de suivi. */
+  saveWatchlist: (name: string, symbols: string[]) =>
+    send<{ name: string; symbols: string[] }>(
+      "PUT",
+      `/watchlists/${encodeURIComponent(name)}`,
+      { symbols },
+    ),
+
+  deleteWatchlist: (name: string) =>
+    send<{ watchlists: Record<string, string[]> }>(
+      "DELETE",
+      `/watchlists/${encodeURIComponent(name)}`,
+    ),
 };
