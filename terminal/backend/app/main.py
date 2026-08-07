@@ -14,6 +14,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
 
 from .cache import cache
 from .pea import registry
@@ -69,6 +70,41 @@ app.add_middleware(
 
 for router in ROUTERS:
     app.include_router(router)
+
+
+@app.get("/", include_in_schema=False)
+async def racine() -> HTMLResponse:
+    """Page d'accueil du service.
+
+    Ce port sert l'API, pas l'interface. Sans cette page, y arriver par
+    mégarde renvoyait un « Not Found » brut qui ne disait ni où était
+    l'erreur, ni où aller.
+    """
+    return HTMLResponse(
+        f"""<!doctype html>
+<html lang="fr"><head><meta charset="utf-8">
+<title>Terminal PEA — service de données</title>
+<style>
+ body {{ font: 15px/1.6 system-ui, sans-serif; background: #0e1116; color: #c9d1d9;
+        margin: 0; display: grid; place-items: center; min-height: 100vh; }}
+ main {{ max-width: 34rem; padding: 2rem; }}
+ h1 {{ font-size: 1.3rem; margin: 0 0 .4rem; color: #e6edf3; }}
+ a {{ color: #5aa9ff; }}
+ code {{ background: #161b22; padding: .1rem .35rem; border-radius: 4px; }}
+ .note {{ color: #8b949e; font-size: 13px; margin-top: 1.4rem; }}
+</style></head><body><main>
+<h1>Vous êtes sur le service de données</h1>
+<p>Ce port expose l'API du terminal, pas son interface.</p>
+<p><strong>L'application se trouve sur
+<a href="http://localhost:{settings.frontend_port}">http://localhost:{settings.frontend_port}</a></strong>
+ — si elle ne répond pas, lancez <code>.\\start-dev.ps1</code>.</p>
+<p class="note">
+ Ici : <a href="/docs">/docs</a> pour explorer l'API,
+ <a href="/api/health">/api/health</a> pour l'état du service.
+ Univers chargé : {len(registry.entries)} valeurs.
+</p>
+</main></body></html>"""
+    )
 
 
 @app.get("/api/health", tags=["système"])

@@ -35,6 +35,9 @@ class Settings:
 
     host: str = field(default_factory=lambda: _env("HOST", "127.0.0.1"))
     port: int = field(default_factory=lambda: _env_int("PORT", 8801))
+    #: Port du serveur de développement Vite. Sert uniquement à orienter
+    #: l'utilisateur qui arrive sur le service de données par mégarde.
+    frontend_port: int = field(default_factory=lambda: _env_int("FRONTEND_PORT", 5180))
 
     #: Répertoire de travail (cache, watchlists).
     state_dir: Path = field(
