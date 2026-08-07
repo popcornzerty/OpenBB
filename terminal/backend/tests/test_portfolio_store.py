@@ -17,10 +17,10 @@ from app.portfolio.targets import compare, total
 class TestLecturaDesNombres:
     def test_format_francais_avec_espaces_et_virgule(self):
         positions, _ = parse_csv(
-            'symbol;quantity;buyingPrice\nWPEA.PA;"13 660,00";5,63\n'
+            'symbol;quantity;buyingPrice\nWPEA.PA;"24 750,00";7,42\n'
         )
-        assert positions[0].quantity == pytest.approx(13660.0)
-        assert positions[0].average_cost == pytest.approx(5.63)
+        assert positions[0].quantity == pytest.approx(24750.0)
+        assert positions[0].average_cost == pytest.approx(7.42)
 
     def test_format_anglais(self):
         positions, _ = parse_csv("symbol,quantity,average_cost\nAAPL,1500.50,12.75\n")
