@@ -13,3 +13,7 @@ frontend/src-tauri/target/
 
 # Univers reconstruit par scripts/build_universe.py — le seed, lui, est versionné
 backend/data/universe_eu.csv
+
+# Environnement Python, si créé à la racine du dépôt autonome
+.venv/
+venv/
