@@ -124,26 +124,27 @@ fournisseur payant (EODHD, FMP Premium, Intrinio) pour dépasser 5 exercices.
 ### Backend
 
 ```bash
-python -m venv .venv && .venv/Scripts/pip install openbb
+python -m venv .venv
+.venv/Scripts/pip install -r backend/requirements.txt
 ```
 
 Puis construire l'univers européen — chaque ticker est réellement interrogé,
 ceux qui ne répondent pas sont écartés :
 
 ```bash
-cd terminal/backend && python scripts/build_universe.py
+cd backend && python scripts/build_universe.py
 ```
 
 Lancer le serveur :
 
 ```bash
-cd terminal/backend && python -m uvicorn app.main:app --port 8801
+cd backend && python -m uvicorn app.main:app --port 8801
 ```
 
 ### Frontend en développement
 
 ```bash
-cd terminal/frontend && npm install && npm run dev
+cd frontend && npm install && npm run dev
 ```
 
 Interface sur <http://localhost:5180> ; les appels `/api` sont relayés vers le
@@ -152,13 +153,13 @@ backend.
 ### Fenêtre native
 
 ```bash
-cd terminal/frontend && npm run tauri dev
+cd frontend && npm run tauri dev
 ```
 
 Construire l'installeur Windows :
 
 ```bash
-cd terminal/frontend && npm run tauri build
+cd frontend && npm run tauri build
 ```
 
 La coquille Tauri démarre le backend au lancement et l'arrête à la fermeture.
@@ -170,7 +171,7 @@ Elle cherche l'interpréteur Python dans l'environnement virtuel du dépôt ;
 ## Tests
 
 ```bash
-cd terminal/backend && python -m pytest
+cd backend && python -m pytest
 ```
 
 Couvrent l'éligibilité PEA (cas où siège et cotation divergent, pays inconnu,
@@ -182,7 +183,7 @@ bornage de la prime, exclusion des fondamentaux négatifs, garde-fous).
 ## Organisation
 
 ```
-terminal/
+terminal-pea/
 ├── backend/
 │   ├── app/
 │   │   ├── pea/            éligibilité PEA, univers européen

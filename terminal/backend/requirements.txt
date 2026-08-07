@@ -1,0 +1,25 @@
+# Dépendances du backend du Terminal PEA.
+#
+#     python -m venv .venv
+#     .venv/Scripts/pip install -r backend/requirements.txt
+#
+# Les versions sont celles éprouvées sur Python 3.14 sous Windows. Elles sont
+# bornées au majeur : une montée de version majeure d'OpenBB ou de pandas a
+# déjà cassé des appels par le passé, et rien n'oblige à la subir sans l'avoir
+# vérifiée.
+
+# Accès aux données de marché. Embarque yfinance, aiohttp, numpy et pandas,
+# qui sont donc disponibles sans être demandés séparément.
+openbb>=4.7.2,<5
+
+# Service HTTP local consommé par le frontend et par la fenêtre Tauri.
+fastapi>=0.136,<1
+uvicorn[standard]>=0.40,<1
+pydantic>=2.13,<3
+
+# Configuration par fichier .env — clés d'API optionnelles, chemins d'état.
+python-dotenv>=1.2,<2
+
+# Lecture des avis de l'AMF : franchissements de seuils et déclarations de
+# dirigeants ne sont publiés qu'en PDF.
+pypdf>=6.15,<7

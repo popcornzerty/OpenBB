@@ -1,0 +1,19 @@
+# Dépendances de développement, en surcouche de requirements.txt.
+#
+#     .venv/Scripts/pip install -r backend/requirements-dev.txt
+#
+# Les deux dernières arrivaient par transitivité dans l'environnement où le
+# projet a été écrit, ce qui masquait leur nécessité. Une installation à
+# blanc les a révélées : sans elles, la collecte échoue ou les tests
+# asynchrones sont ignorés.
+
+-r requirements.txt
+
+pytest>=9,<10
+
+# Greffon requis par « asyncio_mode = auto » dans pytest.ini : sans lui, tous
+# les tests « async def » sont signalés comme non exécutables.
+pytest-asyncio>=1.4,<2
+
+# Client de test de Starlette, utilisé pour monter l'application en mémoire.
+httpx>=0.28,<1
