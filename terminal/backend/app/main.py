@@ -79,7 +79,20 @@ async def racine() -> HTMLResponse:
     Ce port sert l'API, pas l'interface. Sans cette page, y arriver par
     mégarde renvoyait un « Not Found » brut qui ne disait ni où était
     l'erreur, ni où aller.
+
+    Le port de l'interface est un **réglage**, pas une détection : un client
+    qui arrive ici n'est pas passé par le frontend, rien ne permet donc de
+    savoir lequel l'a envoyé. La page l'annonce, faute de quoi une seconde
+    instance mal configurée renverrait sereinement vers la première.
     """
+    port_par_defaut = settings.frontend_port == 5180 and settings.port != 8801
+    avertissement = (
+        "<p class=\"alerte\">Ce port n'est pas celui par défaut, mais celui de "
+        "l'interface l'est resté. Si l'adresse ci-dessus est la mauvaise, "
+        "définissez <code>PEATERM_FRONTEND_PORT</code> au démarrage.</p>"
+        if port_par_defaut
+        else ""
+    )
     return HTMLResponse(
         f"""<!doctype html>
 <html lang="fr"><head><meta charset="utf-8">
@@ -92,16 +105,19 @@ async def racine() -> HTMLResponse:
  a {{ color: #5aa9ff; }}
  code {{ background: #161b22; padding: .1rem .35rem; border-radius: 4px; }}
  .note {{ color: #8b949e; font-size: 13px; margin-top: 1.4rem; }}
+ .alerte {{ color: #d29922; font-size: 13px; border-left: 2px solid #d29922;
+            padding-left: .7rem; }}
 </style></head><body><main>
 <h1>Vous êtes sur le service de données</h1>
 <p>Ce port expose l'API du terminal, pas son interface.</p>
 <p><strong>L'application se trouve sur
 <a href="http://localhost:{settings.frontend_port}">http://localhost:{settings.frontend_port}</a></strong>
  — si elle ne répond pas, lancez <code>.\\start-dev.ps1</code>.</p>
+{avertissement}
 <p class="note">
  Ici : <a href="/docs">/docs</a> pour explorer l'API,
  <a href="/api/health">/api/health</a> pour l'état du service.
- Univers chargé : {len(registry.entries)} valeurs.
+ Service sur le port {settings.port}. Univers chargé : {len(registry.entries)} valeurs.
 </p>
 </main></body></html>"""
     )

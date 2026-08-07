@@ -183,3 +183,49 @@ class TestAucuneEcritureDansWealthfolio:
         source = Path(wealthfolio_db.__file__).read_text(encoding="utf-8").upper()
         for mot in ("INSERT ", "UPDATE ", "DELETE FROM", "DROP "):
             assert mot not in source, mot
+
+
+class TestPageDAccueilDuService:
+    """Le port de l'API n'est pas celui de l'interface.
+
+    Y arriver par mégarde est fréquent — c'est le port qu'on lit dans les
+    journaux. La page doit renvoyer vers la bonne interface, et surtout
+    signaler le cas où elle ne peut pas la connaître.
+    """
+
+    def test_la_racine_repond(self, sans_wealthfolio):
+        reponse = sans_wealthfolio.get("/")
+        assert reponse.status_code == 200
+        assert "service de données" in reponse.text
+
+    def test_elle_renvoie_vers_l_interface(self, sans_wealthfolio):
+        assert "localhost:5180" in sans_wealthfolio.get("/").text
+
+    def test_aucun_avertissement_en_configuration_par_defaut(self, sans_wealthfolio):
+        assert "n'est pas celui par défaut" not in sans_wealthfolio.get("/").text
+
+    def test_un_port_backend_deplace_declenche_l_avertissement(
+        self, sans_wealthfolio, monkeypatch
+    ):
+        """Une seconde instance mal réglée renverrait sinon vers la première.
+
+        Le port de l'interface est un réglage, pas une détection : rien ne
+        permet de le deviner depuis une requête arrivée en direct.
+        """
+        from app import main
+        from app.settings import Settings
+
+        monkeypatch.setattr(main, "settings", Settings(port=8802, frontend_port=5180))
+        assert "n'est pas celui par défaut" in sans_wealthfolio.get("/").text
+
+    def test_deux_instances_correctement_reglees_ne_se_confondent_pas(
+        self, sans_wealthfolio, monkeypatch
+    ):
+        from app import main
+        from app.settings import Settings
+
+        monkeypatch.setattr(main, "settings", Settings(port=8802, frontend_port=5181))
+        html = sans_wealthfolio.get("/").text
+        assert "localhost:5181" in html
+        assert "localhost:5180" not in html
+        assert "n'est pas celui par défaut" not in html
